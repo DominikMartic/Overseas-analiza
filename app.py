@@ -8,7 +8,8 @@ st.set_page_config(
 
 st.title("📦 Sustav za Kontrolu i Analizu Logističkih Računa")
 st.write(
-    "Učitaj mjesečnu tablicu pošiljaka i pregledaj podatke kroz 4 detaljna izvještaja."
+    "Učitaj mjesečnu tablicu pošiljaka. Pregledaj detaljne izvještaje ili zbirne"
+    " ukupne sume."
 )
 
 # Definiranje Zona 3 prema tablici (otoci i posebni režim dostave)
@@ -179,7 +180,7 @@ if uploaded_file is not None:
 
   st.success("Tablica uspješno učitana!")
 
-  if st.button("Generiraj 4 izvještaja"):
+  if st.button("Generiraj izvještaje"):
     rezultati = []
     ukupno_pošiljaka = len(df)
 
@@ -232,14 +233,14 @@ if uploaded_file is not None:
 
       zona = odredis_zonu(pbr)
 
-      # Izračun osnovne cijene, popusta i stvarne ugovorene osnove
-      osnovna_cjenik = izracunaj_osnovnu_cijenu(masa, zona)
-      iznos_popusta = osnovna_cjenik * (popust_posto / 100.0)
-      ugovorena_osnova = osnovna_cjenik - iznos_popusta
+      trebalo_po_cjeniku = izracunaj_osnovnu_cijenu(masa, zona)
+      popust_iznos = trebalo_po_cjeniku * (popust_posto / 100.0)
+      trebalo_s_popustom = trebalo_po_cjeniku - popust_iznos
 
-      ugovoreno_gorivo = ugovorena_osnova * (posto_goriva / 100.0)
+      naplaceno = naplaceni_transport
 
-      razlika_transport = naplaceni_transport - ugovorena_osnova
+      razlika_transport = naplaceno - trebalo_s_popustom
+      ugovoreno_gorivo = trebalo_s_popustom * (posto_goriva / 100.0)
       razlika_gorivo = naplaceno_gorivo - ugovoreno_gorivo
 
       red_podataka = {
@@ -252,50 +253,12 @@ if uploaded_file is not None:
           "ZIP": pbr,
           "Zona": zona,
           "Masa (kg)": masa,
-          "Slanje": d_slanja,
-          "Dostava": d_dostave,
-          "Tranzit (radni dani)": tranzit_dani,
-          "Osnovna cijena (cjenik) (€)": round(osnovna_cjenik, 2),
-          "Iznos popusta na kartone (€)": round(iznos_popusta, 2),
-          "Stvarno ugovoreno (s popustom) (€)": round(ugovorena_osnova, 2),
-          "Naplaćeni Transport (€)": round(naplaceni_transport, 2),
-          "Razlika Transport (€)": round(razlika_transport, 2),
-          "Ugovoreno Gorivo (€)": round(ugovoreno_gorivo, 2),
-          "Naplaćeno Gorivo (€)": round(naplaceno_gorivo, 2),
-          "Razlika Gorivo (€)": round(razlika_gorivo, 2),
+          "Naplaćeno (€)": round(naplaceno, 2),
+          "Trebalo po cjeniku (€)": round(trebalo_po_cjeniku, 2),
+          "Popust iznos (€)": round(popust_iznos, 2),
+          "Trebalo s popustom (€)": round(trebalo_s_popustom, 2),
+          "Razlika (Preplata) (€)": round(razlika_transport, 2),
       }
-
-      postoji_dodatna_naplata = False
-      for usluga in usluge_lista:
-        p_col = next(
-            (
-                c
-                for c in df.columns
-                if c.lower().replace(" ", "")
-                == f"price{usluga.lower().replace(' ', '')}"
-            ),
-            None,
-        )
-        q_col = next(
-            (
-                c
-                for c in df.columns
-                if c.lower().replace(" ", "")
-                == f"quantity{usluga.lower().replace(' ', '')}"
-            ),
-            None,
-        )
-
-        p_iznos = float(row[p_col]) if p_col and pd.notna(row[p_col]) else 0.0
-        q_iznos = float(row[q_col]) if q_col and pd.notna(row[q_col]) else 0.0
-
-        if p_iznos > 0 or q_iznos > 0:
-          postoji_dodatna_naplata = True
-
-        red_podataka[f"{usluga} - Cijena (€)"] = round(p_iznos, 2)
-        red_podataka[f"{usluga} - Količina"] = q_iznos
-
-      red_podataka["Ima Dodatnih Usluga"] = postoji_dodatna_naplata
       rezultati.append(red_podataka)
 
     res_df = pd.DataFrame(rezultati)
@@ -305,7 +268,7 @@ if uploaded_file is not None:
         "📊 1. Izvještaj: Tranzit po zonama",
         "⚖️ 2. Izvještaj: Usporedba svih cijena",
         "🚨 3. Izvještaj: Samo razlike i preplate",
-        "💰 4. Izvještaj: Popusti i stvarna naplata",
+        "📈 4. Izvještaj: Ukupne sume i financije",
     ])
 
     # --- TAB 1: TRANZIT PO ZONAMA ---
@@ -327,88 +290,90 @@ if uploaded_file is not None:
           ]
       ]
       st.dataframe(tranzit_view, use_container_width=True)
-
-      excel_t1 = to_excel(tranzit_view)
       st.download_button(
-          label="📥 Preuzmi Izvještaj 1 (Excel)",
-          data=excel_t1,
-          file_name="izvjestaj_tranzit_po_zonama.xlsx",
-          mime=(
-              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-          ),
+          "📥 Preuzmi Izvještaj 1 (Excel)",
+          to_excel(tranzit_view),
+          "tranzit_po_zonama.xlsx",
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       )
 
     # --- TAB 2: USPOREDBA SVIH CIJENA ---
     with tab2:
-      st.subheader(
-          "Detaljna usporedba naplaćenog vs. ugovorenog za sve pošiljke"
-      )
+      st.subheader("Detaljna usporedba za sve pošiljke")
       st.dataframe(res_df, use_container_width=True)
-
-      excel_t2 = to_excel(res_df)
       st.download_button(
-          label="📥 Preuzmi Izvještaj 2 (Excel)",
-          data=excel_t2,
-          file_name="izvjestaj_sve_usporedbe.xlsx",
-          mime=(
-              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-          ),
+          "📥 Preuzmi Izvještaj 2 (Excel)",
+          to_excel(res_df),
+          "sve_usporedbe.xlsx",
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       )
 
     # --- TAB 3: SAMO RAZLIKE I PREPLATE ---
     with tab3:
-      st.subheader("Izdvojene preplate i nepravilnosti za reklamaciju")
-      sumnjive = res_df[
-          (res_df["Razlika Transport (€)"] > 0.05)
-          | (res_df["Razlika Gorivo (€)"] > 0.05)
-          | (res_df["Ima Dodatnih Usluga"] == True)
-      ]
+      st.subheader("Izdvojene preplate i nepravilnosti")
+      sumnjive = res_df[res_df["Razlika (Preplata) (€)"] > 0.05]
+      st.dataframe(sumnjive, use_container_width=True)
+      st.download_button(
+          "📥 Preuzmi Izvještaj 3 (Excel)",
+          to_excel(sumnjive),
+          "preplate.xlsx",
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      )
 
-      if sumnjive.empty:
-        st.success("Nema pronađenih preplata ni nepravilnosti!")
-      else:
-        st.metric(
-            label="Ukupan iznos preplate za povrat",
-            value=f"{sumnjive['Razlika Transport (€)'].clip(lower=0).sum() + sumnjive['Razlika Gorivo (€)'].clip(lower=0).sum():.2f} €",
-        )
-        st.dataframe(sumnjive, use_container_width=True)
-
-        excel_t3 = to_excel(sumnjive)
-        st.download_button(
-            label="📥 Preuzmi Izvještaj 3 za Reklamaciju (Excel)",
-            data=excel_t3,
-            file_name="izvjestaj_samo_preplate_reklamacije.xlsx",
-            mime=(
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            ),
-        )
-
-    # --- TAB 4: POPUSTI I STVARNA NAPLATA ---
+    # --- TAB 4: UKUPNE SUME I FINANCIJE ---
     with tab4:
       st.subheader(
-          "Financijski pregled: Osnovna cijena, iznos popusta, stvarni ugovor"
-          " i naplaćeno"
+          "💰 Zbirni financijski pregled (Ukupne sume za cijelu tablicu)"
       )
-      financijski_view = res_df[[
-          "RedniBroj",
-          "Shipment ID",
-          "Consignee Name",
-          "Consignee Town",
-          "Number of Parcels",
-          "Reference 1",
-          "Osnovna cijena (cjenik) (€)",
-          "Iznos popusta na kartone (€)",
-          "Stvarno ugovoreno (s popustom) (€)",
-          "Naplaćeni Transport (€)",
-          "Razlika Transport (€)",
-      ]]
-      st.dataframe(financijski_view, use_container_width=True)
 
-      excel_t4 = to_excel(financijski_view)
+      # Izračun ukupnih suma
+      sum_naplaceno = res_df["Naplaćeno (€)"].sum()
+      sum_cjenik = res_df["Trebalo po cjeniku (€)"].sum()
+      sum_popust = res_df["Popust iznos (€)"].sum()
+      sum_s_popustom = res_df["Trebalo s popustom (€)"].sum()
+      sum_razlika = res_df["Razlika (Preplata) (€)"].clip(lower=0).sum()
+
+      # Prikaz preko velikih kartica (metrika)
+      col1, col2, col3 = st.columns(3)
+      col1.metric(
+          label="Ukupno su naplatili", value=f"{sum_naplaceno:,.2f} €"
+      )
+      col2.metric(
+          label="Ukupno trebalo po cjeniku", value=f"{sum_cjenik:,.2f} €"
+      )
+      col3.metric(
+          label="Ukupni iznos popusta", value=f"-{sum_popust:,.2f} €"
+      )
+
+      col4, col5 = st.columns(2)
+      col4.metric(
+          label="Ukupno trebalo biti s popustom", value=f"{sum_s_popustom:,.2f} €"
+      )
+      col5.metric(
+          label="Ukupna preplata (višak za povrat)",
+          value=f"{sum_razlika:,.2f} €",
+      )
+
+      # Kreiramo malu zbirnu tablicu za preuzimanje u Excelu
+      zbirni_df = pd.DataFrame([{
+          "Ukupno pošiljaka": ukupno_pošiljaka,
+          "Ukupno kartona": ukupno_kartona,
+          "Ostvareni popust (%)": f"{popust_posto}%",
+          "Ukupno naplaćeno (€)": round(sum_naplaceno, 2),
+          "Ukupno po cjeniku (€)": round(sum_cjenik, 2),
+          "Ukupni iznos popusta (€)": round(sum_popust, 2),
+          "Ukupno s popustom (€)": round(sum_s_popustom, 2),
+          "Ukupna preplata (€)": round(sum_razlika, 2),
+      }])
+
+      st.markdown("---")
+      st.write("Pregled zbirnih podataka za preuzimanje:")
+      st.dataframe(zbirni_df, use_container_width=True)
+
       st.download_button(
-          label="📥 Preuzmi Izvještaj 4 (Excel)",
-          data=excel_t4,
-          file_name="izvjestaj_popusti_i_stvarna_naplata.xlsx",
+          label="📥 Preuzmi Zbirni Izvještaj (Excel)",
+          data=to_excel(zbirni_df),
+          file_name="zbirni_financijski_izvjestaj.xlsx",
           mime=(
               "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           ),

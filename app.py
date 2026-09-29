@@ -209,18 +209,6 @@ if uploaded_file is not None:
         f" **{popust_posto}%**"
     )
 
-    usluge_lista = [
-        "CODC",
-        "CODH",
-        "OVSC",
-        "OVWC",
-        "OVWT",
-        "OVSZ",
-        "Returned Parcel",
-        "RTSC",
-        "SMS Notification",
-    ]
-
     for idx, row in df.iterrows():
       pbr = row.get("Consignee ZIP Code", 10000)
       masa = float(row.get("Weight", 0.0))
@@ -238,10 +226,7 @@ if uploaded_file is not None:
       trebalo_s_popustom = trebalo_po_cjeniku - popust_iznos
 
       naplaceno = naplaceni_transport
-
       razlika_transport = naplaceno - trebalo_s_popustom
-      ugovoreno_gorivo = trebalo_s_popustom * (posto_goriva / 100.0)
-      razlika_gorivo = naplaceno_gorivo - ugovoreno_gorivo
 
       red_podataka = {
           "RedniBroj": idx + 1,
@@ -253,6 +238,9 @@ if uploaded_file is not None:
           "ZIP": pbr,
           "Zona": zona,
           "Masa (kg)": masa,
+          "Slanje": d_slanja,
+          "Dostava": d_dostave,
+          "Tranzit (radni dani)": tranzit_dani,
           "Naplaćeno (€)": round(naplaceno, 2),
           "Trebalo po cjeniku (€)": round(trebalo_po_cjeniku, 2),
           "Popust iznos (€)": round(popust_iznos, 2),
@@ -326,14 +314,12 @@ if uploaded_file is not None:
           "💰 Zbirni financijski pregled (Ukupne sume za cijelu tablicu)"
       )
 
-      # Izračun ukupnih suma
       sum_naplaceno = res_df["Naplaćeno (€)"].sum()
       sum_cjenik = res_df["Trebalo po cjeniku (€)"].sum()
       sum_popust = res_df["Popust iznos (€)"].sum()
       sum_s_popustom = res_df["Trebalo s popustom (€)"].sum()
       sum_razlika = res_df["Razlika (Preplata) (€)"].clip(lower=0).sum()
 
-      # Prikaz preko velikih kartica (metrika)
       col1, col2, col3 = st.columns(3)
       col1.metric(
           label="Ukupno su naplatili", value=f"{sum_naplaceno:,.2f} €"
@@ -354,7 +340,6 @@ if uploaded_file is not None:
           value=f"{sum_razlika:,.2f} €",
       )
 
-      # Kreiramo malu zbirnu tablicu za preuzimanje u Excelu
       zbirni_df = pd.DataFrame([{
           "Ukupno pošiljaka": ukupno_pošiljaka,
           "Ukupno kartona": ukupno_kartona,

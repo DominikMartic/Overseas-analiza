@@ -8,9 +8,7 @@ st.set_page_config(
 
 st.title("📦 Sustav za Kontrolu i Analizu Logističkih Računa")
 st.write(
-    "Učitaj mjesečnu tablicu pošiljaka i pregledaj podatke kroz 3 različita"
-    " izvještaja u nastavku (sa svim traženim stupcima primatelja i broja"
-    " paketa)."
+    "Učitaj mjesečnu tablicu pošiljaka i pregledaj podatke kroz 4 detaljna izvještaja."
 )
 
 # Definiranje Zona 3 prema tablici (otoci i posebni režim dostave)
@@ -181,9 +179,34 @@ if uploaded_file is not None:
 
   st.success("Tablica uspješno učitana!")
 
-  if st.button("Generiraj 3 izvještaja"):
+  if st.button("Generiraj 4 izvještaja"):
     rezultati = []
     ukupno_pošiljaka = len(df)
+
+    # Izračun ukupnog broja kartona (paketa) u cijeloj tablici
+    ukupno_kartona = (
+        int(df["Number of Parcels"].sum())
+        if "Number of Parcels" in df.columns
+        else 0
+    )
+
+    # Mjesečni količinski popust na temelju ukupnog broja kartona
+    if ukupno_kartona >= 5000:
+      popust_posto = 5.0
+    elif ukupno_kartona >= 4001:
+      popust_posto = 4.0
+    elif ukupno_kartona >= 3001:
+      popust_posto = 3.0
+    elif ukupno_kartona >= 2000:
+      popust_posto = 2.0
+    else:
+      popust_posto = 0.0
+
+    st.info(
+        f"📊 Obrađeno pošiljaka: **{ukupno_pošiljaka}** | Ukupno kartona:"
+        f" **{ukupno_kartona}** | Ostvareni popust na kartone:"
+        f" **{popust_posto}%**"
+    )
 
     usluge_lista = [
         "CODC",
@@ -208,7 +231,12 @@ if uploaded_file is not None:
       tranzit_dani = izracunaj_radne_dane(d_slanja, d_dostave)
 
       zona = odredis_zonu(pbr)
-      ugovorena_osnova = izracunaj_osnovnu_cijenu(masa, zona)
+
+      # Izračun osnovne cijene, popusta i stvarne ugovorene osnove
+      osnovna_cjenik = izracunaj_osnovnu_cijenu(masa, zona)
+      iznos_popusta = osnovna_cjenik * (popust_posto / 100.0)
+      ugovorena_osnova = osnovna_cjenik - iznos_popusta
+
       ugovoreno_gorivo = ugovorena_osnova * (posto_goriva / 100.0)
 
       razlika_transport = naplaceni_transport - ugovorena_osnova
@@ -227,7 +255,9 @@ if uploaded_file is not None:
           "Slanje": d_slanja,
           "Dostava": d_dostave,
           "Tranzit (radni dani)": tranzit_dani,
-          "Ugovorena Osnova (€)": round(ugovorena_osnova, 2),
+          "Osnovna cijena (cjenik) (€)": round(osnovna_cjenik, 2),
+          "Iznos popusta na kartone (€)": round(iznos_popusta, 2),
+          "Stvarno ugovoreno (s popustom) (€)": round(ugovorena_osnova, 2),
           "Naplaćeni Transport (€)": round(naplaceni_transport, 2),
           "Razlika Transport (€)": round(razlika_transport, 2),
           "Ugovoreno Gorivo (€)": round(ugovoreno_gorivo, 2),
@@ -270,11 +300,12 @@ if uploaded_file is not None:
 
     res_df = pd.DataFrame(rezultati)
 
-    # Kreiranje 3 taba (izvještaja)
-    tab1, tab2, tab3 = st.tabs([
+    # Kreiranje 4 taba (izvještaja)
+    tab1, tab2, tab3, tab4 = st.tabs([
         "📊 1. Izvještaj: Tranzit po zonama",
         "⚖️ 2. Izvještaj: Usporedba svih cijena",
         "🚨 3. Izvještaj: Samo razlike i preplate",
+        "💰 4. Izvještaj: Popusti i stvarna naplata",
     ])
 
     # --- TAB 1: TRANZIT PO ZONAMA ---
@@ -351,3 +382,34 @@ if uploaded_file is not None:
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             ),
         )
+
+    # --- TAB 4: POPUSTI I STVARNA NAPLATA ---
+    with tab4:
+      st.subheader(
+          "Financijski pregled: Osnovna cijena, iznos popusta, stvarni ugovor"
+          " i naplaćeno"
+      )
+      financijski_view = res_df[[
+          "RedniBroj",
+          "Shipment ID",
+          "Consignee Name",
+          "Consignee Town",
+          "Number of Parcels",
+          "Reference 1",
+          "Osnovna cijena (cjenik) (€)",
+          "Iznos popusta na kartone (€)",
+          "Stvarno ugovoreno (s popustom) (€)",
+          "Naplaćeni Transport (€)",
+          "Razlika Transport (€)",
+      ]]
+      st.dataframe(financijski_view, use_container_width=True)
+
+      excel_t4 = to_excel(financijski_view)
+      st.download_button(
+          label="📥 Preuzmi Izvještaj 4 (Excel)",
+          data=excel_t4,
+          file_name="izvjestaj_popusti_i_stvarna_naplata.xlsx",
+          mime=(
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          ),
+      )

@@ -5,12 +5,12 @@ st.set_page_config(
     page_title="Kontrola Logističkih Računa", page_icon="📦", layout="wide"
 )
 
-st.title("📦 Napredna Kontrola Logističkih Računa i Dodatnih Usluga")
+st.title("📦 Napredna Kontrola Logističkih Računa i Tranzita")
 st.write(
-    "Učitaj tablicu s pošiljkama, upiši cijenu goriva u izbornik sa strane i pokreni automatsku provjeru. Svaka dodatna usluga sada ima svoj zasebni stupac u izvještaju."
+    "Učitaj tablicu s pošiljkama, upiši cijenu goriva sa strane i pokreni provjeru. Zona 3, radni dani tranzita i sve dodatne usluge sada su razdvojeni u zasebne stupce."
 )
 
-# Definiranje Zona 3 (otoci i posebni režim dostave)
+# Definiranje Zona 3 prema tvojoj tablici (otoci i posebni režim dostave)
 zona_3_pbr = [
     20210,
     20213,
@@ -74,7 +74,7 @@ cjenik = {
         45.0: 10.49,
         50.0: 11.24,
     },
-    "Zona 3": {
+    "Zona 3": {  # Zona 3 koristi osnovu Zone 2 ili specifično
         1.0: 3.31,
         2.0: 3.80,
         5.0: 4.19,
@@ -188,29 +188,22 @@ if uploaded_file is not None:
     ]
 
     for idx, row in df.iterrows():
-      # Osnovni podaci
       pbr = row.get("Consignee ZIP Code", 10000)
       masa = float(row.get("Weight", 0.0))
       naplaceni_transport = float(row.get("Transport Price", 0.0))
       naplaceno_gorivo = float(row.get("Fuel Surcharge", 0.0))
 
-      # Datumi i tranzit
       d_slanja = row.get("Shipping Date", None)
       d_dostave = row.get("Delivery Time", None)
       tranzit_dani = izracunaj_radne_dane(d_slanja, d_dostave)
 
-      # Određivanje zone i izračun ugovorene cijene
       zona = odredis_zonu(pbr)
       ugovorena_osnova = izracunaj_osnovnu_cijenu(masa, zona)
-
-      # Izračun očekivanog goriva
       ugovoreno_gorivo = ugovorena_osnova * (posto_goriva / 100.0)
 
-      # Razlike po komponentama
       razlika_transport = naplaceni_transport - ugovorena_osnova
       razlika_gorivo = naplaceno_gorivo - ugovoreno_gorivo
 
-      # Osnovni zapis reda
       red_podataka = {
           "RedniBroj": idx + 1,
           "Shipment ID": row.get("Shipment ID", ""),
@@ -228,7 +221,6 @@ if uploaded_file is not None:
           "Razlika Gorivo (€)": round(razlika_gorivo, 2),
       }
 
-      # Dinamičko dodavanje svake dodatne usluge u zasebni stupac
       postoji_dodatna_naplata = False
       for usluga in usluge_lista:
         p_col = next(
@@ -256,7 +248,6 @@ if uploaded_file is not None:
         if p_iznos > 0 or q_iznos > 0:
           postoji_dodatna_naplata = True
 
-        # Svaka usluga dobiva svoja dva stupca (Cijena i Količina)
         red_podataka[f"{usluga} - Cijena (€)"] = round(p_iznos, 2)
         red_podataka[f"{usluga} - Količina"] = q_iznos
 
@@ -278,9 +269,17 @@ if uploaded_file is not None:
       popust_posto = 0.0
 
     st.success(
-        f"Analiza uspješno završena! Obrađeno pošiljaka: {ukupno_pošiljaka} |"
-        f" Mjesečni količinski popust: **{popust_posto}%**"
+        f"Analiza završena! Obrađeno pošiljaka: {ukupno_pošiljaka} | Mjesečni"
+        f" količinski popust: **{popust_posto}%**"
     )
+
+    # Poseban prikaz pošiljaka za Zonu 3
+    zona_3_df = res_df[res_df["Zona"] == "Zona 3"]
+    if not zona_3_df.empty:
+      st.subheader(
+          f"🏝️ Poseban pregled pošiljaka za Zonu 3 (Ukupno: {len(zona_3_df)})"
+      )
+      st.dataframe(zona_3_df)
 
     # Filtriramo stavke s preplatom ili dodatnim uslugama
     sumnjive = res_df[
@@ -300,8 +299,8 @@ if uploaded_file is not None:
     )
 
     st.subheader(
-        "Popis pošiljaka s pogrešnim naplatama / dodatnim uslugama (svaka"
-        " usluga u svom stupcu):"
+        "Popis pošiljaka s pogrešnim naplatama / dodatnim uslugama i radnim"
+        " danima tranzita:"
     )
     st.dataframe(sumnjive)
 

@@ -1,3 +1,4 @@
+import io
 import pandas as pd
 import streamlit as st
 
@@ -7,7 +8,7 @@ st.set_page_config(
 
 st.title("📦 Napredna Kontrola Logističkih Računa i Tranzita")
 st.write(
-    "Učitaj tablicu s pošiljkama, upiši cijenu goriva sa strane i pokreni provjeru. Zona 3, radni dani tranzita i sve dodatne usluge sada su razdvojeni u zasebne stupce."
+    "Učitaj tablicu s pošiljkama, upiši cijenu goriva sa strane i pokreni provjeru. Izvještaj se sada generira kao pravi Excel dokument (.xlsx) sa savršeno odvojenim stupcima!"
 )
 
 # Definiranje Zona 3 prema tvojoj tablici (otoci i posebni režim dostave)
@@ -74,7 +75,7 @@ cjenik = {
         45.0: 10.49,
         50.0: 11.24,
     },
-    "Zona 3": {  # Zona 3 koristi osnovu Zone 2 ili specifično
+    "Zona 3": {
         1.0: 3.31,
         2.0: 3.80,
         5.0: 4.19,
@@ -142,6 +143,15 @@ def izracunaj_radne_dane(datum_slanja, datum_dostave):
     return max(0, radni_dani)
   except:
     return "Nema informacije"
+
+
+# Funkcija za pretvorbu DataFrama u Excel bajtove za download
+def to_excel(df):
+  output = io.BytesIO()
+  with pd.ExcelWriter(output, engine="openpyxl") as writer:
+    df.to_excel(writer, index=False, sheet_name="Reklamacije")
+  processed_data = output.getvalue()
+  return processed_data
 
 
 # Bočna traka za unos cijene goriva
@@ -304,11 +314,13 @@ if uploaded_file is not None:
     )
     st.dataframe(sumnjive)
 
-    # Preuzimanje izvještaja
-    csv = sumnjive.to_csv(index=False).encode("utf-8")
+    # Preuzimanje Excel izvještaja umjesto CSV-a
+    excel_data = to_excel(sumnjive)
     st.download_button(
-        label="Preuzmi detaljni izvještaj za reklamaciju (CSV)",
-        data=csv,
-        file_name="detaljne_reklamacije_logistika.csv",
-        mime="text/csv",
+        label="📥 Preuzmi Excel izvještaj za reklamaciju (.xlsx)",
+        data=excel_data,
+        file_name="detaljne_reklamacije_logistika.xlsx",
+        mime=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
     )

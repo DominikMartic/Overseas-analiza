@@ -8,8 +8,8 @@ st.set_page_config(
 
 st.title("📦 Sustav za Kontrolu i Analizu Logističkih Računa")
 st.write(
-    "Učitaj mjesečnu tablicu pošiljaka. Pregledaj detaljne izvještaje, preplate,"
-    " ukupne sume ili dodatne usluge."
+    "Učitaj mjesečnu tablicu pošiljaka. Ugrađeni su točni ugovoreni uvjeti i"
+    " cjenik dodatnih usluga."
 )
 
 # Definiranje Zona 3 prema tablici (otoci i posebni režim dostave)
@@ -103,15 +103,23 @@ def izracunaj_osnovnu_cijenu(masa, zona):
   if masa <= 50.0:
     for g in granice:
       if masa <= g:
-        return z_tablica[g]
-    return z_tablica[50.0]
+        osnova = z_tablica[g]
+        break
+    else:
+      osnova = z_tablica[50.0]
   else:
     baza = z_tablica[50.0]
     višak = masa - 50.0
     dodatak_po_kg = (
         cijena_preko_50_z1 if zona == "Zona 1" else cijena_preko_50_z2
     )
-    return baza + višak * dodatak_po_kg
+    osnova = baza + višak * dodatak_po_kg
+
+  # Uvjet za Zonu 3: na početnu cijenu dodaje se 25%
+  if zona == "Zona 3":
+    osnova = osnova * 1.25
+
+  return osnova
 
 
 # Izračun postotka goriva prema razredima
@@ -207,17 +215,17 @@ if uploaded_file is not None:
         f" **{popust_posto}%**"
     )
 
-    usluge_lista = [
-        "CODC",
-        "CODH",
-        "OVSC",
-        "OVWC",
-        "OVWT",
-        "OVSZ",
-        "Returned Parcel",
-        "RTSC",
-        "SMS Notification",
-    ]
+    usluge_definicije = {
+        "CODC": 0.53,
+        "CODH": 0.66,
+        "OVSC": 0.0,
+        "OVWC": 0.0,
+        "OVWT": 6.40,
+        "OVSZ": 6.40,
+        "Returned Parcel": 0.5,  # 50% od osnovne cijene pošiljke
+        "RTSC": 0.0,
+        "SMS Notification": 0.13,
+    }
 
     for idx, row in df.iterrows():
       pbr = row.get("Consignee ZIP Code", 10000)
@@ -231,9 +239,9 @@ if uploaded_file is not None:
 
       zona = odredis_zonu(pbr)
 
-      trebalo_po_cjeniku = izracunaj_osnovnu_cijenu(masa, zona)
-      popust_iznos = trebalo_po_cjeniku * (popust_posto / 100.0)
-      trebalo_s_popustom = trebalo_po_cjeniku - popust_iznos
+      osnovna_cjenik = izracunaj_osnovnu_cijenu(masa, zona)
+      popust_iznos = osnovna_cjenik * (popust_posto / 100.0)
+      trebalo_s_popustom = osnovna_cjenik - popust_iznos
 
       naplaceno = naplaceni_transport
       razlika_transport = naplaceno - trebalo_s_popustom
@@ -252,14 +260,16 @@ if uploaded_file is not None:
           "Dostava": d_dostave,
           "Tranzit (radni dani)": tranzit_dani,
           "Naplaćeno (€)": round(naplaceno, 2),
-          "Trebalo po cjeniku (€)": round(trebalo_po_cjeniku, 2),
+          "Trebalo po cjeniku (€)": round(osnovna_cjenik, 2),
           "Popust iznos (€)": round(popust_iznos, 2),
           "Trebalo s popustom (€)": round(trebalo_s_popustom, 2),
           "Razlika (Preplata) (€)": round(razlika_transport, 2),
       }
 
       postoji_dodatna_naplata = False
-      for usluga in usluge_lista:
+      sve_dodatne_razlike = 0.0
+
+      for usluga, ugovorena_cijena_usluge in usluge_definicije.items():
         p_col = next(
             (
                 c
@@ -285,10 +295,28 @@ if uploaded_file is not None:
         if p_iznos > 0 or q_iznos > 0:
           postoji_dodatna_naplata = True
 
-        red_podataka[f"{usluga} - Cijena (€)"] = round(p_iznos, 2)
-        red_podataka[f"{usluga} - Količina"] = q_iznos
+        # Izračun ugovorene cijene za ovu specifičnu uslugu
+        if usluga == "Returned Parcel":
+          ocekivana_usluga = trebalo_s_popustom * 0.5 if q_iznos > 0 else 0.0
+        elif ugovorena_cijena_usluge > 0:
+          ocekivana_usluga = ugovorena_cijena_usluge * (
+              q_iznos if q_iznos > 0 else 1
+          )
+        else:
+          ocekivana_usluga = (
+              p_iznos  // Ako nemamo fiksnu cijenu, pratimo naplaćeno
+          )
+
+        razlika_usluge = p_iznos - ocekivana_usluga
+        sve_dodatne_razlike += max(0, razlika_usluge)
+
+        red_podataka[f"{usluga} - Naplaćeno (€)"] = round(p_iznos, 2)
+        red_podataka[f"{usluga} - Očekivano (€)"] = round(ocekivana_usluga, 2)
 
       red_podataka["Ima Dodatnih Usluga"] = postoji_dodatna_naplata
+      red_podataka["Ukupna preplata dodatnih usluga (€)"] = round(
+          sve_dodatne_razlike, 2
+      )
       rezultati.append(red_podataka)
 
     res_df = pd.DataFrame(rezultati)
@@ -341,8 +369,13 @@ if uploaded_file is not None:
 
     # --- TAB 3: SAMO RAZLIKE I PREPLATE ---
     with tab3:
-      st.subheader("Izdvojene preplate i nepravilnosti")
-      sumnjive = res_df[res_df["Razlika (Preplata) (€)"] > 0.05]
+      st.subheader(
+          "Izdvojene preplate na transportu, gorivu i dodatnim uslugama"
+      )
+      sumnjive = res_df[
+          (res_df["Razlika (Preplata) (€)"] > 0.05)
+          | (res_df["Ukupna preplata dodatnih usluga (€)"] > 0.05)
+      ]
       st.dataframe(sumnjive, use_container_width=True)
       st.download_button(
           "📥 Preuzmi Izvještaj 3 (Excel)",
@@ -361,6 +394,9 @@ if uploaded_file is not None:
       sum_popust = res_df["Popust iznos (€)"].sum()
       sum_s_popustom = res_df["Trebalo s popustom (€)"].sum()
       sum_razlika = res_df["Razlika (Preplata) (€)"].clip(lower=0).sum()
+      sum_dodatne_preplate = res_df[
+          "Ukupna preplata dodatnih usluga (€)"
+      ].sum()
 
       col1, col2, col3 = st.columns(3)
       col1.metric(
@@ -373,13 +409,16 @@ if uploaded_file is not None:
           label="Ukupni iznos popusta", value=f"-{sum_popust:,.2f} €"
       )
 
-      col4, col5 = st.columns(2)
+      col4, col5, col6 = st.columns(3)
       col4.metric(
           label="Ukupno trebalo biti s popustom", value=f"{sum_s_popustom:,.2f} €"
       )
       col5.metric(
-          label="Ukupna preplata (višak za povrat)",
-          value=f"{sum_razlika:,.2f} €",
+          label="Preplata na transportu", value=f"{sum_razlika:,.2f} €"
+      )
+      col6.metric(
+          label="Preplata na dodatnim uslugama",
+          value=f"{sum_dodatne_preplate:,.2f} €",
       )
 
       zbirni_df = pd.DataFrame([{
@@ -390,7 +429,8 @@ if uploaded_file is not None:
           "Ukupno po cjeniku (€)": round(sum_cjenik, 2),
           "Ukupni iznos popusta (€)": round(sum_popust, 2),
           "Ukupno s popustom (€)": round(sum_s_popustom, 2),
-          "Ukupna preplata (€)": round(sum_razlika, 2),
+          "Preplata transport (€)": round(sum_razlika, 2),
+          "Preplata dodatne usluge (€)": round(sum_dodatne_preplate, 2),
       }])
 
       st.markdown("---")
@@ -406,7 +446,7 @@ if uploaded_file is not None:
     # --- TAB 5: DODATNE USLUGE ---
     with tab5:
       st.subheader(
-          "🛠️ Izvještaj pošiljaka kod kojih su naplaćene dodatne usluge"
+          "🛠️ Izvještaj naplaćenih dodatnih usluga uspoređenih s ugovorom"
       )
       dodatne_df = res_df[res_df["Ima Dodatnih Usluga"] == True]
 

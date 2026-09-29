@@ -304,7 +304,7 @@ if uploaded_file is not None:
           )
         else:
           ocekivana_usluga = (
-              p_iznos  // Ako nemamo fiksnu cijenu, pratimo naplaćeno
+              p_iznos  # Ako nemamo fiksnu cijenu, pratimo naplaćeno
           )
 
         razlika_usluge = p_iznos - ocekivana_usluga

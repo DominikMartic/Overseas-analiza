@@ -8,8 +8,7 @@ st.set_page_config(
 
 st.title("📦 Sustav za Kontrolu i Analizu Logističkih Računa")
 st.write(
-    "Učitaj mjesečnu tablicu pošiljaka. Zbirni izvještaj sada radi konačni"
-    " obračun na razini cijele fakture bez PDV-a."
+    "Učitaj mjesečnu tablicu pošiljaka. Cjenik je ažuriran i uvećan za 5%."
 )
 
 # Definiranje Zona 3 prema tablici (otoci i posebni režim dostave)
@@ -46,54 +45,54 @@ def odredis_zonu(pbr):
     return "Zona 2"
 
 
-# Ugovoreni cjenik po zonama i masama (bez PDV-a)
+# Ugovoreni cjenik po zonama i masama (uvećan za 5%, bez PDV-a)
 cjenik = {
     "Zona 1": {
-        1.0: 2.84,
-        2.0: 3.15,
-        5.0: 3.44,
-        10.0: 4.79,
-        15.0: 5.39,
-        20.0: 6.07,
-        25.0: 6.82,
-        30.0: 7.34,
-        35.0: 8.09,
-        40.0: 8.38,
-        45.0: 8.46,
-        50.0: 9.21,
+        1.0: 2.84 * 1.05,
+        2.0: 3.15 * 1.05,
+        5.0: 3.44 * 1.05,
+        10.0: 4.79 * 1.05,
+        15.0: 5.39 * 1.05,
+        20.0: 6.07 * 1.05,
+        25.0: 6.82 * 1.05,
+        30.0: 7.34 * 1.05,
+        35.0: 8.09 * 1.05,
+        40.0: 8.38 * 1.05,
+        45.0: 8.46 * 1.05,
+        50.0: 9.21 * 1.05,
     },
     "Zona 2": {
-        1.0: 3.31,
-        2.0: 3.80,
-        5.0: 4.19,
-        10.0: 5.54,
-        15.0: 6.29,
-        20.0: 7.18,
-        25.0: 8.09,
-        30.0: 8.68,
-        35.0: 9.59,
-        40.0: 10.04,
-        45.0: 10.49,
-        50.0: 11.24,
+        1.0: 3.31 * 1.05,
+        2.0: 3.80 * 1.05,
+        5.0: 4.19 * 1.05,
+        10.0: 5.54 * 1.05,
+        15.0: 6.29 * 1.05,
+        20.0: 7.18 * 1.05,
+        25.0: 8.09 * 1.05,
+        30.0: 8.68 * 1.05,
+        35.0: 9.59 * 1.05,
+        40.0: 10.04 * 1.05,
+        45.0: 10.49 * 1.05,
+        50.0: 11.24 * 1.05,
     },
     "Zona 3": {
-        1.0: 3.31,
-        2.0: 3.80,
-        5.0: 4.19,
-        10.0: 5.54,
-        15.0: 6.29,
-        20.0: 7.18,
-        25.0: 8.09,
-        30.0: 8.68,
-        35.0: 9.59,
-        40.0: 10.04,
-        45.0: 10.49,
-        50.0: 11.24,
+        1.0: 3.31 * 1.05,
+        2.0: 3.80 * 1.05,
+        5.0: 4.19 * 1.05,
+        10.0: 5.54 * 1.05,
+        15.0: 6.29 * 1.05,
+        20.0: 7.18 * 1.05,
+        25.0: 8.09 * 1.05,
+        30.0: 8.68 * 1.05,
+        35.0: 9.59 * 1.05,
+        40.0: 10.04 * 1.05,
+        45.0: 10.49 * 1.05,
+        50.0: 11.24 * 1.05,
     },
 }
 
-cijena_preko_50_z1 = 0.19
-cijena_preko_50_z2 = 0.22
+cijena_preko_50_z1 = 0.19 * 1.05
+cijena_preko_50_z2 = 0.22 * 1.05
 
 
 def izracunaj_osnovnu_cijenu(masa, zona):
@@ -239,7 +238,7 @@ if uploaded_file is not None:
 
       zona = odredis_zonu(pbr)
 
-      # Očekivane ugovorene vrijednosti po cjeniku
+      # Očekivane ugovorene vrijednosti po novom cjeniku (+5%)
       ugovorena_osnova = izracunaj_osnovnu_cijenu(masa, zona)
       ugovoreno_gorivo = ugovorena_osnova * (posto_goriva / 100.0)
 
@@ -318,7 +317,7 @@ if uploaded_file is not None:
         "⚖️ 2. Izvještaj: Usporedba svih cijena",
         "🚨 3. Izvještaj: Samo razlike i preplate",
         "📈 4. Izvještaj: Zbirne sume fakture",
-        "🛠️ 5. Izvještaj: Dodatne usluge",
+        "🛠️️ 5. Izvještaj: Dodatne usluge",
     ])
 
     # --- TAB 1: TRANZIT PO ZONAMA ---
@@ -437,7 +436,7 @@ if uploaded_file is not None:
 
       zbirni_detalji = pd.DataFrame([
           {
-              "Kategorija troška": "Transport (Osnovna cijena)",
+              "Kategorija troška": "Transport (Osnovna cijena - uvećano 5%)",
               "Što su naplatili (€)": round(uk_naplaceni_transport, 2),
               "Što je trebalo biti (€)": round(uk_ugovorena_osnova, 2),
           },

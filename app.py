@@ -8,8 +8,8 @@ st.set_page_config(
 
 st.title("📦 Sustav za Kontrolu i Analizu Logističkih Računa")
 st.write(
-    "Učitaj mjesečnu tablicu pošiljaka. Pregledaj detaljne izvještaje ili zbirne"
-    " ukupne sume."
+    "Učitaj mjesečnu tablicu pošiljaka. Pregledaj detaljne izvještaje, preplate,"
+    " ukupne sume ili dodatne usluge."
 )
 
 # Definiranje Zona 3 prema tablici (otoci i posebni režim dostave)
@@ -184,14 +184,12 @@ if uploaded_file is not None:
     rezultati = []
     ukupno_pošiljaka = len(df)
 
-    # Izračun ukupnog broja kartona (paketa) u cijeloj tablici
     ukupno_kartona = (
         int(df["Number of Parcels"].sum())
         if "Number of Parcels" in df.columns
         else 0
     )
 
-    # Mjesečni količinski popust na temelju ukupnog broja kartona
     if ukupno_kartona >= 5000:
       popust_posto = 5.0
     elif ukupno_kartona >= 4001:
@@ -208,6 +206,18 @@ if uploaded_file is not None:
         f" **{ukupno_kartona}** | Ostvareni popust na kartone:"
         f" **{popust_posto}%**"
     )
+
+    usluge_lista = [
+        "CODC",
+        "CODH",
+        "OVSC",
+        "OVWC",
+        "OVWT",
+        "OVSZ",
+        "Returned Parcel",
+        "RTSC",
+        "SMS Notification",
+    ]
 
     for idx, row in df.iterrows():
       pbr = row.get("Consignee ZIP Code", 10000)
@@ -247,16 +257,49 @@ if uploaded_file is not None:
           "Trebalo s popustom (€)": round(trebalo_s_popustom, 2),
           "Razlika (Preplata) (€)": round(razlika_transport, 2),
       }
+
+      postoji_dodatna_naplata = False
+      for usluga in usluge_lista:
+        p_col = next(
+            (
+                c
+                for c in df.columns
+                if c.lower().replace(" ", "")
+                == f"price{usluga.lower().replace(' ', '')}"
+            ),
+            None,
+        )
+        q_col = next(
+            (
+                c
+                for c in df.columns
+                if c.lower().replace(" ", "")
+                == f"quantity{usluga.lower().replace(' ', '')}"
+            ),
+            None,
+        )
+
+        p_iznos = float(row[p_col]) if p_col and pd.notna(row[p_col]) else 0.0
+        q_iznos = float(row[q_col]) if q_col and pd.notna(row[q_col]) else 0.0
+
+        if p_iznos > 0 or q_iznos > 0:
+          postoji_dodatna_naplata = True
+
+        red_podataka[f"{usluga} - Cijena (€)"] = round(p_iznos, 2)
+        red_podataka[f"{usluga} - Količina"] = q_iznos
+
+      red_podataka["Ima Dodatnih Usluga"] = postoji_dodatna_naplata
       rezultati.append(red_podataka)
 
     res_df = pd.DataFrame(rezultati)
 
-    # Kreiranje 4 taba (izvještaja)
-    tab1, tab2, tab3, tab4 = st.tabs([
+    # Kreiranje 5 taba (izvještaja)
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "📊 1. Izvještaj: Tranzit po zonama",
         "⚖️ 2. Izvještaj: Usporedba svih cijena",
         "🚨 3. Izvještaj: Samo razlike i preplate",
         "📈 4. Izvještaj: Ukupne sume i financije",
+        "🛠️ 5. Izvještaj: Dodatne usluge",
     ])
 
     # --- TAB 1: TRANZIT PO ZONAMA ---
@@ -313,7 +356,6 @@ if uploaded_file is not None:
       st.subheader(
           "💰 Zbirni financijski pregled (Ukupne sume za cijelu tablicu)"
       )
-
       sum_naplaceno = res_df["Naplaćeno (€)"].sum()
       sum_cjenik = res_df["Trebalo po cjeniku (€)"].sum()
       sum_popust = res_df["Popust iznos (€)"].sum()
@@ -354,12 +396,32 @@ if uploaded_file is not None:
       st.markdown("---")
       st.write("Pregled zbirnih podataka za preuzimanje:")
       st.dataframe(zbirni_df, use_container_width=True)
-
       st.download_button(
-          label="📥 Preuzmi Zbirni Izvještaj (Excel)",
-          data=to_excel(zbirni_df),
-          file_name="zbirni_financijski_izvjestaj.xlsx",
-          mime=(
-              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-          ),
+          "📥 Preuzmi Zbirni Izvještaj (Excel)",
+          to_excel(zbirni_df),
+          "zbirni_financijski_izvjestaj.xlsx",
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       )
+
+    # --- TAB 5: DODATNE USLUGE ---
+    with tab5:
+      st.subheader(
+          "🛠️ Izvještaj pošiljaka kod kojih su naplaćene dodatne usluge"
+      )
+      dodatne_df = res_df[res_df["Ima Dodatnih Usluga"] == True]
+
+      if dodatne_df.empty:
+        st.success("Nema pošiljaka s naplaćenim dodatnim uslugama u ovoj tablici!")
+      else:
+        st.write(
+            f"Pronađeno pošiljaka s dodatnim uslugama: {len(dodatne_df)}"
+        )
+        st.dataframe(dodatne_df, use_container_width=True)
+        st.download_button(
+            label="📥 Preuzmi Izvještaj Dodatnih Usluga (Excel)",
+            data=to_excel(dodatne_df),
+            file_name="izvjestaj_dodatne_usluge.xlsx",
+            mime=(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            ),
+        )

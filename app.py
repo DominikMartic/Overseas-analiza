@@ -6,12 +6,13 @@ st.set_page_config(
     page_title="Kontrola Logističkih Računa", page_icon="📦", layout="wide"
 )
 
-st.title("📦 Napredna Kontrola Logističkih Računa i Tranzita")
+st.title("📦 Sustav za Kontrolu i Analizu Logističkih Računa")
 st.write(
-    "Učitaj tablicu s pošiljkama, upiši cijenu goriva sa strane i pokreni provjeru. Izvještaj se sada generira kao pravi Excel dokument (.xlsx) sa savršeno odvojenim stupcima!"
+    "Učitaj mjesečnu tablicu pošiljaka i pregledaj podatke kroz 3 različita"
+    " izvještaja u nastavku."
 )
 
-# Definiranje Zona 3 prema tvojoj tablici (otoci i posebni režim dostave)
+# Definiranje Zona 3 prema tablici (otoci i posebni režim dostave)
 zona_3_pbr = [
     20210,
     20213,
@@ -145,16 +146,14 @@ def izracunaj_radne_dane(datum_slanja, datum_dostave):
     return "Nema informacije"
 
 
-# Funkcija za pretvorbu DataFrama u Excel bajtove za download
 def to_excel(df):
   output = io.BytesIO()
   with pd.ExcelWriter(output, engine="openpyxl") as writer:
-    df.to_excel(writer, index=False, sheet_name="Reklamacije")
-  processed_data = output.getvalue()
-  return processed_data
+    df.to_excel(writer, index=False, sheet_name="Izvjestaj")
+  return output.getvalue()
 
 
-# Bočna traka za unos cijene goriva
+# Bočna traka
 st.sidebar.header("Parametri obračuna")
 trenutna_cijena_goriva = st.sidebar.number_input(
     "Prosječna cijena goriva (€):",
@@ -181,7 +180,7 @@ if uploaded_file is not None:
 
   st.success("Tablica uspješno učitana!")
 
-  if st.button("Pokreni detaljnu provjeru i analizu"):
+  if st.button("Generiraj 3 izvještaja"):
     rezultati = []
     ukupno_pošiljaka = len(df)
 
@@ -266,61 +265,80 @@ if uploaded_file is not None:
 
     res_df = pd.DataFrame(rezultati)
 
-    # Količinski popust na kraju na temelju broja pošiljaka
-    if ukupno_pošiljaka >= 5000:
-      popust_posto = 5.0
-    elif ukupno_pošiljaka >= 4001:
-      popust_posto = 4.0
-    elif ukupno_pošiljaka >= 3001:
-      popust_posto = 3.0
-    elif ukupno_pošiljaka >= 2000:
-      popust_posto = 2.0
-    else:
-      popust_posto = 0.0
+    # Kreiranje 3 taba (izvještaja)
+    tab1, tab2, tab3 = st.tabs([
+        "📊 1. Izvještaj: Tranzit po zonama",
+        "⚖️ 2. Izvještaj: Usporedba svih cijena",
+        "🚨 3. Izvještaj: Samo razlike i preplate",
+    ])
 
-    st.success(
-        f"Analiza završena! Obrađeno pošiljaka: {ukupno_pošiljaka} | Mjesečni"
-        f" količinski popust: **{popust_posto}%**"
-    )
+    # --- TAB 1: TRANZIT PO ZONAMA ---
+    with tab1:
+      st.subheader("Analiza tranzita pošiljaka po zonama (u radnim danima)")
+      tranzit_view = res_df[
+          [
+              "RedniBroj",
+              "Shipment ID",
+              "ZIP",
+              "Zona",
+              "Slanje",
+              "Dostava",
+              "Tranzit (radni dani)",
+          ]
+      ]
+      st.dataframe(tranzit_view, use_container_width=True)
 
-    # Poseban prikaz pošiljaka za Zonu 3
-    zona_3_df = res_df[res_df["Zona"] == "Zona 3"]
-    if not zona_3_df.empty:
-      st.subheader(
-          f"🏝️ Poseban pregled pošiljaka za Zonu 3 (Ukupno: {len(zona_3_df)})"
+      excel_t1 = to_excel(tranzit_view)
+      st.download_button(
+          label="📥 Preuzmi Izvještaj 1 (Excel)",
+          data=excel_t1,
+          file_name="izvjestaj_tranzit_po_zonama.xlsx",
+          mime=(
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          ),
       )
-      st.dataframe(zona_3_df)
 
-    # Filtriramo stavke s preplatom ili dodatnim uslugama
-    sumnjive = res_df[
-        (res_df["Razlika Transport (€)"] > 0.05)
-        | (res_df["Razlika Gorivo (€)"] > 0.05)
-        | (res_df["Ima Dodatnih Usluga"] == True)
-    ]
+    # --- TAB 2: USPOREDBA SVIH CIJENA ---
+    with tab2:
+      st.subheader(
+          "Detaljna usporedba naplaćenog vs. ugovorenog za sve pošiljke"
+      )
+      st.dataframe(res_df, use_container_width=True)
 
-    col1, col2 = st.columns(2)
-    col1.metric(
-        label="Ukupna preplata na osnovnoj cijeni (kilaža)",
-        value=f"{res_df['Razlika Transport (€)'].clip(lower=0).sum():.2f} €",
-    )
-    col2.metric(
-        label="Ukupna preplata na dodatku za gorivo",
-        value=f"{res_df['Razlika Gorivo (€)'].clip(lower=0).sum():.2f} €",
-    )
+      excel_t2 = to_excel(res_df)
+      st.download_button(
+          label="📥 Preuzmi Izvještaj 2 (Excel)",
+          data=excel_t2,
+          file_name="izvjestaj_sve_usporedbe.xlsx",
+          mime=(
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          ),
+      )
 
-    st.subheader(
-        "Popis pošiljaka s pogrešnim naplatama / dodatnim uslugama i radnim"
-        " danima tranzita:"
-    )
-    st.dataframe(sumnjive)
+    # --- TAB 3: SAMO RAZLIKE I PREPLATE ---
+    with tab3:
+      st.subheader("Izdvojene preplate i nepravilnosti za reklamaciju")
+      sumnjive = res_df[
+          (res_df["Razlika Transport (€)"] > 0.05)
+          | (res_df["Razlika Gorivo (€)"] > 0.05)
+          | (res_df["Ima Dodatnih Usluga"] == True)
+      ]
 
-    # Preuzimanje Excel izvještaja umjesto CSV-a
-    excel_data = to_excel(sumnjive)
-    st.download_button(
-        label="📥 Preuzmi Excel izvještaj za reklamaciju (.xlsx)",
-        data=excel_data,
-        file_name="detaljne_reklamacije_logistika.xlsx",
-        mime=(
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        ),
-    )
+      if sumnjive.empty:
+        st.success("Nema pronađenih preplata ni nepravilnosti!")
+      else:
+        st.metric(
+            label="Ukupan iznos preplate za povrat",
+            value=f"{sumnjive['Razlika Transport (€)'].clip(lower=0).sum() + sumnjive['Razlika Gorivo (€)'].clip(lower=0).sum():.2f} €",
+        )
+        st.dataframe(sumnjive, use_container_width=True)
+
+        excel_t3 = to_excel(sumnjive)
+        st.download_button(
+            label="📥 Preuzmi Izvještaj 3 za Reklamaciju (Excel)",
+            data=excel_t3,
+            file_name="izvjestaj_samo_preplate_reklamacije.xlsx",
+            mime=(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            ),
+        )

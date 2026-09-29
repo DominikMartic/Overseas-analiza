@@ -9,7 +9,8 @@ st.set_page_config(
 st.title("📦 Sustav za Kontrolu i Analizu Logističkih Računa")
 st.write(
     "Učitaj mjesečnu tablicu pošiljaka i pregledaj podatke kroz 3 različita"
-    " izvještaja u nastavku."
+    " izvještaja u nastavku (sa svim traženim stupcima primatelja i broja"
+    " paketa)."
 )
 
 # Definiranje Zona 3 prema tablici (otoci i posebni režim dostave)
@@ -216,6 +217,10 @@ if uploaded_file is not None:
       red_podataka = {
           "RedniBroj": idx + 1,
           "Shipment ID": row.get("Shipment ID", ""),
+          "Consignee Name": row.get("Consignee Name", ""),
+          "Consignee Town": row.get("Consignee Town", ""),
+          "Number of Parcels": row.get("Number of Parcels", 1),
+          "Reference 1": row.get("Reference 1", ""),
           "ZIP": pbr,
           "Zona": zona,
           "Masa (kg)": masa,
@@ -279,6 +284,10 @@ if uploaded_file is not None:
           [
               "RedniBroj",
               "Shipment ID",
+              "Consignee Name",
+              "Consignee Town",
+              "Number of Parcels",
+              "Reference 1",
               "ZIP",
               "Zona",
               "Slanje",

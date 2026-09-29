@@ -7,10 +7,10 @@ st.set_page_config(
 
 st.title("📦 Napredna Kontrola Logističkih Računa i Dodatnih Usluga")
 st.write(
-    "Učitaj tablicu s pošiljkama, upiši cijenu goriva u izbornik sa strane i pokreni automatsku provjeru cijena, goriva, tranzita i svih dodatnih usluga."
+    "Učitaj tablicu s pošiljkama, upiši cijenu goriva u izbornik sa strane i pokreni automatsku provjeru. Svaka dodatna usluga sada ima svoj zasebni stupac u izvještaju."
 )
 
-# Definiranje Zona 3 prema tvojoj tablici (otoci i posebni režim dostave)
+# Definiranje Zona 3 (otoci i posebni režim dostave)
 zona_3_pbr = [
     20210,
     20213,
@@ -138,7 +138,6 @@ def izracunaj_radne_dane(datum_slanja, datum_dostave):
     d2 = pd.to_datetime(datum_dostave, format="%d.%m.%Y", errors="coerce")
     if pd.isna(d1) or pd.isna(d2):
       return "Nema informacije"
-    # Izračun radnih dana (isključuje subotu i nedjelju)
     radni_dani = pd.bdate_range(start=d1, end=d2).shape[0] - 1
     return max(0, radni_dani)
   except:
@@ -176,6 +175,18 @@ if uploaded_file is not None:
     rezultati = []
     ukupno_pošiljaka = len(df)
 
+    usluge_lista = [
+        "CODC",
+        "CODH",
+        "OVSC",
+        "OVWC",
+        "OVWT",
+        "OVSZ",
+        "Returned Parcel",
+        "RTSC",
+        "SMS Notification",
+    ]
+
     for idx, row in df.iterrows():
       # Osnovni podaci
       pbr = row.get("Consignee ZIP Code", 10000)
@@ -195,28 +206,31 @@ if uploaded_file is not None:
       # Izračun očekivanog goriva
       ugovoreno_gorivo = ugovorena_osnova * (posto_goriva / 100.0)
 
-      # Razlike po komponentama (pozitivno znači preplata od strane logističara)
+      # Razlike po komponentama
       razlika_transport = naplaceni_transport - ugovorena_osnova
       razlika_gorivo = naplaceno_gorivo - ugovoreno_gorivo
 
-      # Dodatne usluge (tražimo stupce s prefiksima Price i Quantity)
-      dodatne_usluge_info = {}
+      # Osnovni zapis reda
+      red_podataka = {
+          "RedniBroj": idx + 1,
+          "Shipment ID": row.get("Shipment ID", ""),
+          "ZIP": pbr,
+          "Zona": zona,
+          "Masa (kg)": masa,
+          "Slanje": d_slanja,
+          "Dostava": d_dostave,
+          "Tranzit (radni dani)": tranzit_dani,
+          "Ugovorena Osnova (€)": round(ugovorena_osnova, 2),
+          "Naplaćeni Transport (€)": round(naplaceni_transport, 2),
+          "Razlika Transport (€)": round(razlika_transport, 2),
+          "Ugovoreno Gorivo (€)": round(ugovoreno_gorivo, 2),
+          "Naplaćeno Gorivo (€)": round(naplaceno_gorivo, 2),
+          "Razlika Gorivo (€)": round(razlika_gorivo, 2),
+      }
+
+      # Dinamičko dodavanje svake dodatne usluge u zasebni stupac
       postoji_dodatna_naplata = False
-
-      usluge_lista = [
-          "CODC",
-          "CODH",
-          "OVSC",
-          "OVWC",
-          "OVWT",
-          "OVSZ",
-          "Returned Parcel",
-          "RTSC",
-          "SMS Notification",
-      ]
-
       for usluga in usluge_lista:
-        # Pronađi odgovarajuće stupce u tablici bez obzira na mala/velika slova
         p_col = next(
             (
                 c
@@ -241,31 +255,13 @@ if uploaded_file is not None:
 
         if p_iznos > 0 or q_iznos > 0:
           postoji_dodatna_naplata = True
-          dodatne_usluge_info[usluga] = {
-              "Cijena": p_iznos,
-              "Količina": q_iznos,
-          }
 
-      rezultati.append({
-          "RedniBroj": idx + 1,
-          "Shipment ID": row.get("Shipment ID", ""),
-          "ZIP": pbr,
-          "Zona": zona,
-          "Masa (kg)": masa,
-          "Slanje": d_slanja,
-          "Dostava": d_dostave,
-          "Tranzit (radni dani)": tranzit_dani,
-          "Ugovorena Osnova (€)": round(ugovorena_osnova, 2),
-          "Naplaćeni Transport (€)": round(naplaceni_transport, 2),
-          "Razlika Transport (€)": round(razlika_transport, 2),
-          "Ugovoreno Gorivo (€)": round(ugovoreno_gorivo, 2),
-          "Naplaćeno Gorivo (€)": round(naplaceno_gorivo, 2),
-          "Razlika Gorivo (€)": round(razlika_gorivo, 2),
-          "Ima Dodatnih Usluga": postoji_dodatna_naplata,
-          "Detalji Dodatnih Usluga": str(dodatne_usluge_info)
-          if postoji_dodatna_naplata
-          else "Nema",
-      })
+        # Svaka usluga dobiva svoja dva stupca (Cijena i Količina)
+        red_podataka[f"{usluga} - Cijena (€)"] = round(p_iznos, 2)
+        red_podataka[f"{usluga} - Količina"] = q_iznos
+
+      red_podataka["Ima Dodatnih Usluga"] = postoji_dodatna_naplata
+      rezultati.append(red_podataka)
 
     res_df = pd.DataFrame(rezultati)
 
@@ -286,14 +282,13 @@ if uploaded_file is not None:
         f" Mjesečni količinski popust: **{popust_posto}%**"
     )
 
-    # Filtriramo stavke gdje postoji preplata na transportu ili gorivu (> 0.05€) ili dodatne usluge
+    # Filtriramo stavke s preplatom ili dodatnim uslugama
     sumnjive = res_df[
         (res_df["Razlika Transport (€)"] > 0.05)
         | (res_df["Razlika Gorivo (€)"] > 0.05)
         | (res_df["Ima Dodatnih Usluga"] == True)
     ]
 
-    # Metrike ukupnih preplata
     col1, col2 = st.columns(2)
     col1.metric(
         label="Ukupna preplata na osnovnoj cijeni (kilaža)",
@@ -305,7 +300,8 @@ if uploaded_file is not None:
     )
 
     st.subheader(
-        "Popis pošiljaka s pogrešnim naplatama / dodatnim uslugama:"
+        "Popis pošiljaka s pogrešnim naplatama / dodatnim uslugama (svaka"
+        " usluga u svom stupcu):"
     )
     st.dataframe(sumnjive)
 

@@ -4,6 +4,12 @@ import re
 import pandas as pd
 import streamlit as st
 
+# Importi za generiranje PDF-a
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+
 st.set_page_config(
     page_title="Kontrola Logističkih Računa", page_icon="📦", layout="wide"
 )
@@ -32,7 +38,6 @@ def ucitaj_dopucene_rokove():
       except:
         continue
 
-  # Ako nije našlo po imenu, traži bilo koji xlsx koji ima 'dani' u imenu
   if df_rokovi is None:
     for f in os.listdir("."):
       if f.endswith(".xlsx") and (
@@ -411,6 +416,107 @@ def to_excel(df):
   return output.getvalue()
 
 
+# Funkcija za generiranje PDF izvještaja
+def generiraj_pdf_izvjestaj(
+    uk_validnih,
+    uk_kasni,
+    postotak_urednih,
+    postotak_kasnjenja,
+    uk_naplaceni_transport,
+    uk_ugovorena_osnova,
+    popust_posto,
+    iznos_popusta_faktura,
+    ugovorena_osnova_nakon_popusta,
+    uk_naplaceno_gorivo,
+    ugovoreno_gorivo_nakon_popusta,
+    posto_goriva,
+):
+  buffer = io.BytesIO()
+  doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+  elements = []
+  styles = getSampleStyleSheet()
+
+  # Naslov
+  title_style = ParagraphStyle(
+      'TitleStyle',
+      parent=styles['Heading1'],
+      fontSize=18,
+      textColor=colors.HexColor('#1f4e78'),
+      spaceAfter=15,
+      alignment=1
+  )
+  elements.append(Paragraph("IZVJEŠTAJ 6: SAŽETAK KONTROLE (TRANZIT I CIJENE)", title_style))
+  elements.append(Spacer(1, 10))
+
+  # Sekcija 1: Tranzit
+  elements.append(Paragraph("<b>1. Analiza rokova isporuke i tranzita</b>", styles['Heading2']))
+  tranzit_data = [
+      ["Pokazatelj", "Vrijednost"],
+      ["Ukupno analizirano pošiljaka s datumima", str(uk_validnih)],
+      ["Uredno isporučeno u roku", f"{uk_validnih - uk_kasni} ({postotak_urednih:.1f}%)"],
+      ["Izvan ugovorenog roka (Kašnjenje)", f"{uk_kasni} ({postotak_kasnjenja:.1f}%)"],
+  ]
+  t1 = Table(tranzit_data, colWidths=[250, 250])
+  t1.setStyle(TableStyle([
+      ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1f4e78')),
+      ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+      ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+      ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+      ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+      ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f2f2f2')),
+      ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+  ]))
+  elements.append(t1)
+  elements.append(Spacer(1, 15))
+
+  # Sekcija 2: Transport
+  elements.append(Paragraph("<b>2. Usporedba cijena transporta (Osnova)</b>", styles['Heading2']))
+  transport_data = [
+      ["Kategorija", "Iznos (€ bez PDV-a)"],
+      ["Ukupno naplaćeni transport (faktura)", f"{uk_naplaceni_transport:,.2f} €"],
+      ["Ugovorena osnova po cjeniku (+5%)", f"{uk_ugovorena_osnova:,.2f} €"],
+      [f"Količinski popust ({popust_posto}%)", f"-{iznos_popusta_faktura:,.2f} €"],
+      ["Ugovorena osnova NAKON popusta", f"{ugovorena_osnova_nakon_popusta:,.2f} €"],
+      ["RAZLIKA (Naplaćeno - Treba biti)", f"{(uk_naplaceni_transport - ugovorena_osnova_nakon_popusta):,.2f} €"],
+  ]
+  t2 = Table(transport_data, colWidths=[250, 250])
+  t2.setStyle(TableStyle([
+      ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1f4e78')),
+      ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+      ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+      ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+      ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+      ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f2f2f2')),
+      ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+  ]))
+  elements.append(t2)
+  elements.append(Spacer(1, 15))
+
+  # Sekcija 3: Gorivo
+  elements.append(Paragraph(f"<b>3. Usporedba dodatka za gorivo ({posto_goriva:.1f}%)</b>", styles['Heading2']))
+  gorivo_data = [
+      ["Kategorija", "Iznos (€ bez PDV-a)"],
+      ["Ukupno naplaćeno gorivo na fakturi", f"{uk_naplaceno_gorivo:,.2f} €"],
+      ["Koliko treba biti (obračunato na ugovorenu osnovu)", f"{ugovoreno_gorivo_nakon_popusta:,.2f} €"],
+      ["RAZLIKA ZA GORIVO (Naplaćeno - Treba biti)", f"{(uk_naplaceno_gorivo - ugovoreno_gorivo_nakon_popusta):,.2f} €"],
+  ]
+  t3 = Table(gorivo_data, colWidths=[250, 250])
+  t3.setStyle(TableStyle([
+      ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1f4e78')),
+      ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+      ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+      ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+      ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+      ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f2f2f2')),
+      ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+  ]))
+  elements.append(t3)
+
+  doc.build(elements)
+  buffer.seek(0)
+  return buffer.getvalue()
+
+
 st.sidebar.header("Parametri obračuna")
 trenutna_cijena_goriva = st.sidebar.number_input(
     "Prosječna cijena goriva (€ bez PDV-a):",
@@ -575,193 +681,108 @@ if uploaded_file is not None:
           ugovorena_osnova + ugovoreno_gorivo + zbroj_naplacenih_dodatnih
       )
       red_podataka["Sveukupno Očekivano (€)"] = round(očekivano_sveukupno, 2)
-      red_podataka["Ima Dodatnih Usluga"] = (
-          postoji_dodatna_naplata  # Ispravljen naziv ključa
-      )
+      red_podataka["Ima Dodatnih Usluga"] = postoji_dodatna_naplata
 
       rezultati.append(red_podataka)
 
     res_df = pd.DataFrame(rezultati)
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    # Izračuni za 6. Izvještaj (PDF)
+    valid_tranzit = res_df[res_df["Stvarni Tranzit (dani)"] >= 0]
+    uk_validnih = len(valid_tranzit)
+    if uk_validnih > 0:
+      uk_kasni = int(valid_tranzit["Kasni"].sum())
+      postotak_kasnjenja = (uk_kasni / uk_validnih) * 100.0
+      postotak_urednih = 100.0 - postotak_kasnjenja
+    else:
+      uk_kasni = 0
+      postotak_kasnjenja = 0.0
+      postotak_urednih = 100.0
+
+    uk_naplaceni_transport = res_df["Naplaćeni Transport (€)"].sum()
+    uk_ugovorena_osnova = res_df["Ugovorena Osnova (€)"].sum()
+    iznos_popusta_faktura = uk_ugovorena_osnova * (popust_posto / 100.0)
+    ugovorena_osnova_nakon_popusta = uk_ugovorena_osnova - iznos_popusta_faktura
+
+    uk_naplaceno_gorivo = res_df["Naplaćeno Gorivo (€)"].sum()
+    ugovoreno_gorivo_nakon_popusta = ugovorena_osnova_nakon_popusta * (posto_goriva / 100.0)
+
+    pdf_bytes = generiraj_pdf_izvjestaj(
+        uk_validnih,
+        uk_kasni,
+        postotak_urednih,
+        postotak_kasnjenja,
+        uk_naplaceni_transport,
+        uk_ugovorena_osnova,
+        popust_posto,
+        iznos_popusta_faktura,
+        ugovorena_osnova_nakon_popusta,
+        uk_naplaceno_gorivo,
+        ugovoreno_gorivo_nakon_popusta,
+        posto_goriva,
+    )
+
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "📊 1. Izvještaj: Tranzit i rokovi isporuke",
         "⚖️ 2. Izvještaj: Usporedba svih cijena",
         "🚨 3. Izvještaj: Samo razlike i preplate",
         "📈 4. Izvještaj: Zbirne sume fakture",
         "🛠 5. Izvještaj: Dodatne usluge",
+        "📄 6. Izvještaj: PDF Sažetak (Tranzit i Gorivo)",
     ])
 
     with tab1:
-      st.subheader(
-          "Analiza tranzita pošiljaka i provjera ugovorenih rokova isporuke"
-      )
-
-      valid_tranzit = res_df[res_df["Stvarni Tranzit (dani)"] >= 0]
-      uk_validnih = len(valid_tranzit)
-      if uk_validnih > 0:
-        uk_kasni = valid_tranzit["Kasni"].sum()
-        postotak_kasnjenja = (uk_kasni / uk_validnih) * 100.0
-        postotak_urednih = 100.0 - postotak_kasnjenja
-      else:
-        uk_kasni = 0
-        postotak_kasnjenja = 0.0
-        postotak_urednih = 100.0
-
+      st.subheader("Analiza tranzita pošiljaka i provjera ugovorenih rokova isporuke")
       col_a, col_b, col_c = st.columns(3)
-      col_a.metric(
-          label="Uredno isporučeno u roku",
-          value=f"{postotak_urednih:.1f}%",
-          delta=f"{uk_validnih - uk_kasni} pošiljaka",
-      )
-      col_b.metric(
-          label="Izvan ugovorenog roka (Kašnjenje)",
-          value=f"{postotak_kasnjenja:.1f}%",
-          delta=f"-{uk_kasni} pošiljaka",
-          delta_color="inverse",
-      )
-      col_c.metric(
-          label="Ukupno analizirano pošiljaka s datumima",
-          value=f"{uk_validnih}",
-      )
-
+      col_a.metric(label="Uredno isporučeno u roku", value=f"{postotak_urednih:.1f}%", delta=f"{uk_validnih - uk_kasni} pošiljaka")
+      col_b.metric(label="Izvan ugovorenog roka (Kašnjenje)", value=f"{postotak_kasnjenja:.1f}%", delta=f"-{uk_kasni} pošiljaka", delta_color="inverse")
+      col_c.metric(label="Ukupno analizirano pošiljaka s datumima", value=f"{uk_validnih}")
       st.markdown("---")
-
-      tranzit_view = res_df[
-          [
-              "RedniBroj",
-              "Shipment ID",
-              "Consignee Name",
-              "Consignee Town",
-              "ZIP",
-              "Zona",
-              "Slanje",
-              "Dostava",
-              "Stvarni Tranzit (dani)",
-              "Dopušteni Rok (dani)",
-              "Status Dostave",
-          ]
-      ]
+      tranzit_view = res_df[[
+          "RedniBroj", "Shipment ID", "Consignee Name", "Consignee Town",
+          "ZIP", "Zona", "Slanje", "Dostava", "Stvarni Tranzit (dani)",
+          "Dopušteni Rok (dani)", "Status Dostave"
+      ]]
       st.dataframe(tranzit_view, use_container_width=True)
-      st.download_button(
-          "📥 Preuzmi Izvještaj 1 (Excel)",
-          to_excel(tranzit_view),
-          "analiza_tranzita_i_rokova.xlsx",
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      )
+      st.download_button("📥 Preuzmi Izvještaj 1 (Excel)", to_excel(tranzit_view), "analiza_tranzita_i_rokova.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
     with tab2:
       st.subheader("Detaljna usporedba za sve pošiljke")
       st.dataframe(res_df, use_container_width=True)
-      st.download_button(
-          "📥 Preuzmi Izvještaj 2 (Excel)",
-          to_excel(res_df),
-          "sve_usporedbe.xlsx",
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      )
+      st.download_button("📥 Preuzmi Izvještaj 2 (Excel)", to_excel(res_df), "sve_usporedbe.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
     with tab3:
-      st.subheader(
-          "Izdvojene preplate na transportu, gorivu i dodatnim uslugama"
-      )
-      res_df["Razlika Fakture (€)"] = (
-          res_df["Sveukupno Naplaćeno (€)"]
-          - res_df["Sveukupno Očekivano (€)"]
-      )
+      st.subheader("Izdvojene preplate na transportu, gorivu i dodatnim uslugama")
+      res_df["Razlika Fakture (€)"] = res_df["Sveukupno Naplaćeno (€)"] - res_df["Sveukupno Očekivano (€)"]
       sumnjive = res_df[res_df["Razlika Fakture (€)"] > 0.05]
       st.dataframe(sumnjive, use_container_width=True)
-      st.download_button(
-          "📥 Preuzmi Izvještaj 3 (Excel)",
-          to_excel(sumnjive),
-          "preplate.xlsx",
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      )
+      st.download_button("📥 Preuzmi Izvještaj 3 (Excel)", to_excel(sumnjive), "preplate.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
     with tab4:
-      st.subheader(
-          "📈 Zbirni financijski pregled cijele fakture (Sve cijene bez PDV-a)"
-      )
-      uk_naplaceni_transport = res_df["Naplaćeni Transport (€)"].sum()
-      uk_naplaceno_gorivo = res_df["Naplaćeno Gorivo (€)"].sum()
+      st.subheader("📈 Zbirni financijski pregled cijele fakture (Sve cijene bez PDV-a)")
+      uk_naplaceni_transport_val = res_df["Naplaćeni Transport (€)"].sum()
+      uk_naplaceno_gorivo_val = res_df["Naplaćeno Gorivo (€)"].sum()
       uk_naplacene_dodatne = res_df["Naplaćene Dodatne Usluge Ukupno (€)"].sum()
-      sveukupno_naplaceno_racun = (
-          uk_naplaceni_transport + uk_naplaceno_gorivo + uk_naplacene_dodatne
-      )
+      sveukupno_naplaceno_racun = uk_naplaceni_transport_val + uk_naplaceno_gorivo_val + uk_naplacene_dodatne
 
-      uk_ugovorena_osnova = res_df["Ugovorena Osnova (€)"].sum()
-      iznos_popusta_faktura = uk_ugovorena_osnova * (popust_posto / 100.0)
-      ugovorena_osnova_nakon_popusta = (
-          uk_ugovorena_osnova - iznos_popusta_faktura
-      )
-      ugovoreno_gorivo_nakon_popusta = ugovorena_osnova_nakon_popusta * (
-          posto_goriva / 100.0
-      )
-      sveukupno_ocekivano_ugovor = (
-          ugovorena_osnova_nakon_popusta
-          + ugovoreno_gorivo_nakon_popusta
-          + uk_naplacene_dodatne
-      )
-      konačna_preplata = (
-          sveukupno_naplaceno_racun - sveukupno_ocekivano_ugovor
-      )
+      sveukupno_ocekivano_ugovor = ugovorena_osnova_nakon_popusta + ugovoreno_gorivo_nakon_popusta + uk_naplacene_dodatne
+      konačna_preplata = sveukupno_naplaceno_racun - sveukupno_ocekivano_ugovor
 
       col1, col2, col3 = st.columns(3)
-      col1.metric(
-          label="Sveukupno su naplatili (Bez PDV-a)",
-          value=f"{sveukupno_naplaceno_racun:,.2f} €",
-      )
-      col2.metric(
-          label="Sveukupno trebalo po ugovoru",
-          value=f"{sveukupno_ocekivano_ugovor:,.2f} €",
-      )
-      col3.metric(
-          label="Ukupna preplata / Višak za povrat",
-          value=f"{max(0, konačna_preplata):,.2f} €",
-      )
+      col1.metric(label="Sveukupno su naplatili (Bez PDV-a)", value=f"{sveukupno_naplaceno_racun:,.2f} €")
+      col2.metric(label="Sveukupno trebalo po ugovoru", value=f"{sveukupno_ocekivano_ugovor:,.2f} €")
+      col3.metric(label="Ukupna preplata / Višak za povrat", value=f"{max(0, konačna_preplata):,.2f} €")
 
       st.markdown("---")
-      st.markdown("### Detaljna struktura zbroja fakture:")
       zbirni_detalji = pd.DataFrame([
-          {
-              "Kategorija troška": "Transport (Osnovna cijena - uvećano 5%)",
-              "Što su naplatili (€)": round(uk_naplaceni_transport, 2),
-              "Što je trebalo biti (€)": round(uk_ugovorena_osnova, 2),
-          },
-          {
-              "Kategorija troška": (
-                  f"Količinski popust na fakturu ({popust_posto}%)"
-              ),
-              "Što su naplatili (€)": 0.00,
-              "Što je trebalo biti (€)": round(-iznos_popusta_faktura, 2),
-          },
-          {
-              "Kategorija troška": (
-                  f"Dodatak za gorivo ({posto_goriva:.1f}%)"
-              ),
-              "Što su naplatili (€)": round(uk_naplaceno_gorivo, 2),
-              "Što je trebalo biti (€)": round(
-                  ugovoreno_gorivo_nakon_popusta, 2
-              ),
-          },
-          {
-              "Kategorija troška": "Sve dodatne usluge (CODC, OVWT, SMS...)",
-              "Što su naplatili (€)": round(uk_naplacene_dodatne, 2),
-              "Što je trebalo biti (€)": round(uk_naplacene_dodatne, 2),
-          },
-          {
-              "Kategorija troška": "SVEUKUPNO ZA CIJELU FAKTURU",
-              "Što su naplatili (€)": round(sveukupno_naplaceno_racun, 2),
-              "Što je trebalo biti (€)": round(sveukupno_ocekivano_ugovor, 2),
-          },
+          {"Kategorija troška": "Transport (Osnovna cijena - uvećano 5%)", "Što su naplatili (€)": round(uk_naplaceni_transport_val, 2), "Što je trebalo biti (€)": round(uk_ugovorena_osnova, 2)},
+          {"Kategorija troška": f"Količinski popust na fakturu ({popust_posto}%)", "Što su naplatili (€)": 0.00, "Što je trebalo biti (€)": round(-iznos_popusta_faktura, 2)},
+          {"Kategorija troška": f"Dodatak za gorivo ({posto_goriva:.1f}%)", "Što su naplatili (€)": round(uk_naplaceno_gorivo_val, 2), "Što je trebalo biti (€)": round(ugovoreno_gorivo_nakon_popusta, 2)},
+          {"Kategorija troška": "Sve dodatne usluge (CODC, OVWT, SMS...)", "Što su naplatili (€)": round(uk_naplacene_dodatne, 2), "Što je trebalo biti (€)": round(uk_naplacene_dodatne, 2)},
+          {"Kategorija troška": "SVEUKUPNO ZA CIJELU FAKTURU", "Što su naplatili (€)": round(sveukupno_naplaceno_racun, 2), "Što je trebalo biti (€)": round(sveukupno_ocekivano_ugovor, 2)},
       ])
       st.dataframe(zbirni_detalji, use_container_width=True)
-      st.download_button(
-          label="📥 Preuzmi Zbirni Financijski Izvještaj (Excel)",
-          data=to_excel(zbirni_detalji),
-          file_name="zbirni_financijski_izvjestaj_faktura.xlsx",
-          mime=(
-              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-          ),
-      )
+      st.download_button(label="📥 Preuzmi Zbirni Financijski Izvještaj (Excel)", data=to_excel(zbirni_detalji), file_name="zbirni_financijski_izvjestaj_faktura.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
     with tab5:
       st.subheader("🛠️ Izvještaj pošiljaka s naplaćenim dodatnim uslugama")
@@ -769,15 +790,25 @@ if uploaded_file is not None:
       if dodatne_df.empty:
         st.success("Nema pošiljaka s naplaćenim dodatnim uslugama u ovoj tablici!")
       else:
-        st.write(
-            f"Pronađeno pošiljaka s dodatnim uslugama: {len(dodatne_df)}"
-        )
+        st.write(f"Pronađeno pošiljaka s dodatnim uslugama: {len(dodatne_df)}")
         st.dataframe(dodatne_df, use_container_width=True)
-        st.download_button(
-            label="📥 Preuzmi Izvještaj Dodatnih Usluga (Excel)",
-            data=to_excel(dodatne_df),
-            file_name="izvjestaj_dodatne_usluge.xlsx",
-            mime=(
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            ),
-        )
+        st.download_button(label="📥 Preuzmi Izvještaj Dodatnih Usluga (Excel)", data=to_excel(dodatne_df), file_name="izvjestaj_dodatne_usluge.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+    with tab6:
+      st.subheader("📄 6. Izvještaj: PDF Sažetak (Tranzit, Transport i Gorivo)")
+      st.write("Ovaj izvještaj u PDF formatu sažima ključne pokazatelje o rokovima isporuke te usporedbi naplaćenog i ugovorenog iznosa za transport i gorivo.")
+      
+      # Prikaz pregleda razlika direktno na ekranu
+      col_x, col_y = st.columns(2)
+      with col_x:
+        st.metric(label="Razlika u Transportu", value=f"{(uk_naplaceni_transport - ugovorena_osnova_nakon_popusta):,.2f} €")
+      with col_y:
+        st.metric(label="Razlika u Gorivu", value=f"{(uk_naplaceno_gorivo - ugovoreno_gorivo_nakon_popusta):,.2f} €")
+
+      st.markdown("---")
+      st.download_button(
+          label="📥 Preuzmi 6. Izvještaj (PDF)",
+          data=pdf_bytes,
+          file_name="sazetak_tranzit_transport_gorivo.pdf",
+          mime="application/pdf",
+      )

@@ -27,7 +27,6 @@ try:
         FONT_REGULAR = "DejaVuSans"
         FONT_BOLD = "DejaVuSans-Bold"
     else:
-        # Pokušaj pronaći fontove u sustavu ako ih nema u lokalnom folderu (npr. na Linux serverima)
         sys_fonts = [
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
             "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
@@ -267,7 +266,6 @@ def generiraj_pdf_izvjestaj(
 
     styles = getSampleStyleSheet()
 
-    # Primjena fonta na SVE postojeće stilove u sustavu da se izbjegne fallback na Helvetica
     for style_name in styles.byName:
         styles[style_name].fontName = FONT_REGULAR
 
@@ -312,7 +310,6 @@ def generiraj_pdf_izvjestaj(
     )
     elements.append(Spacer(1, 10))
 
-    # Pomoćna funkcija za pretvaranje običnog teksta u siguran Paragraph unutar tablica
     def wrap_data(data_matrix, is_header=False):
         formatted = []
         for row_idx, row in enumerate(data_matrix):
@@ -801,7 +798,7 @@ if uploaded_file is not None:
             st.subheader(
                 "🛠️ Izvještaj pošiljaka s naplaćenim dodatnim uslugama"
             )
-            dodatne_df = res_df[res_df["Ima Dodatnych Usluga"] == True]
+            dodatne_df = res_df[res_df["Ima Dodatnih Usluga"] == True]
             if dodatne_df.empty:
                 st.success(
                     "Nema pošiljaka s naplaćenim dodatnim uslugama u ovoj"

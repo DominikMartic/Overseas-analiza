@@ -4,11 +4,23 @@ import re
 import pandas as pd
 import streamlit as st
 
-# Importi za generiranje PDF-a
+# Importi za generiranje PDF-a i registraciju fonta
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+
+# Registracija DejaVuSans fonta za ispravan prikaz hrvatskih dijakritika u PDF-u
+try:
+    pdfmetrics.registerFont(TTFont("DejaVuSans", "DejaVuSans.ttf"))
+    pdfmetrics.registerFont(TTFont("DejaVuSans-Bold", "DejaVuSans-Bold.ttf"))
+    FONT_REGULAR = "DejaVuSans"
+    FONT_BOLD = "DejaVuSans-Bold"
+except:
+    FONT_REGULAR = "Helvetica"
+    FONT_BOLD = "Helvetica-Bold"
 
 st.set_page_config(
     page_title="Kontrola Logističkih Računa", page_icon="📦", layout="wide"
@@ -92,199 +104,29 @@ dopusteni_rokovi_dict = ucitaj_dopucene_rokove()
 
 # Službene liste poštanskih brojeva za Zonu 2 i Zonu 3
 zona_3_pbr = [
-    20230,
-    20240,
-    20242,
-    20243,
-    20244,
-    20245,
-    20246,
-    20247,
-    20248,
-    20250,
-    20260,
-    20263,
-    20264,
-    20267,
-    20269,
-    20270,
-    20271,
-    20272,
-    20273,
-    20274,
-    20275,
-    21400,
-    21403,
-    21404,
-    21405,
-    21410,
-    21412,
-    21413,
-    21420,
-    21423,
-    21424,
-    21425,
-    21426,
-    21450,
-    21454,
-    21460,
-    21462,
-    21463,
-    21465,
-    21466,
-    21467,
-    21468,
-    21469,
-    21480,
-    21483,
-    21485,
-    22240,
-    22242,
-    22243,
-    22244,
-    23212,
-    23234,
-    23249,
-    23250,
-    23251,
-    23262,
-    23263,
-    23264,
-    23271,
-    23272,
-    23273,
-    23274,
-    23275,
-    51280,
-    51281,
-    51500,
-    51511,
-    51512,
-    51513,
-    51514,
-    51515,
-    51516,
-    51517,
-    51521,
-    51522,
-    51523,
-    51550,
-    51551,
-    51554,
-    51555,
-    51556,
-    51557,
-    51559,
-    51564,
-    53291,
-    53294,
-    53296,
+    20230, 20240, 20242, 20243, 20244, 20245, 20246, 20247, 20248, 20250,
+    20260, 20263, 20264, 20267, 20269, 20270, 20271, 20272, 20273, 20274,
+    20275, 21400, 21403, 21404, 21405, 21410, 21412, 21413, 21420, 21423,
+    21424, 21425, 21426, 21450, 21454, 21460, 21462, 21463, 21465, 21466,
+    21467, 21468, 21469, 21480, 21483, 21485, 22240, 22242, 22243, 22244,
+    23212, 23234, 23249, 23250, 23251, 23262, 23263, 23264, 23271, 23272,
+    23273, 23274, 23275, 51280, 51281, 51500, 51511, 51512, 51513, 51514,
+    51515, 51516, 51517, 51521, 51522, 51523, 51550, 51551, 51554, 51555,
+    51556, 51557, 51559, 51564, 53291, 53294, 53296,
 ]
 
 zona_2_pbr = [
-    23440,
-    23445,
-    23446,
-    31300,
-    31321,
-    31322,
-    31323,
-    31324,
-    31542,
-    31543,
-    31555,
-    43270,
-    43271,
-    43273,
-    44202,
-    44203,
-    44210,
-    44213,
-    44214,
-    44221,
-    44222,
-    44251,
-    44271,
-    44272,
-    44273,
-    44400,
-    44401,
-    44402,
-    44412,
-    44425,
-    44430,
-    44450,
-    47220,
-    47221,
-    47222,
-    47245,
-    47246,
-    47304,
-    47305,
-    47306,
-    47307,
-    47313,
-    47314,
-    48260,
-    48265,
-    48267,
-    48323,
-    51212,
-    51213,
-    51251,
-    51300,
-    51311,
-    51312,
-    51313,
-    51314,
-    51315,
-    51316,
-    51321,
-    51322,
-    51323,
-    51324,
-    51325,
-    51328,
-    51329,
-    51414,
-    51418,
-    52000,
-    52402,
-    52420,
-    52421,
-    52422,
-    52425,
-    52426,
-    52427,
-    52428,
-    52434,
-    53000,
-    53202,
-    53203,
-    53205,
-    53206,
-    53211,
-    53212,
-    53213,
-    53221,
-    53222,
-    53223,
-    53224,
-    53230,
-    53231,
-    53234,
-    53235,
-    53244,
-    53250,
-    53252,
-    53260,
-    53261,
-    53262,
-    53284,
-    53285,
-    53286,
-    53287,
-    53288,
+    23440, 23445, 23446, 31300, 31321, 31322, 31323, 31324, 31542, 31543,
+    31555, 43270, 43271, 43273, 44202, 44203, 44210, 44213, 44214, 44221,
+    44222, 44251, 44271, 44272, 44273, 44400, 44401, 44402, 44412, 44425,
+    44430, 44450, 47220, 47221, 47222, 47245, 47246, 47304, 47305, 47306,
+    47307, 47313, 47314, 48260, 48265, 48267, 48323, 51212, 51213, 51251,
+    51300, 51311, 51312, 51313, 51314, 51315, 51316, 51321, 51322, 51323,
+    51324, 51325, 51328, 51329, 51414, 51418, 52000, 52402, 52420, 52421,
+    52422, 52425, 52426, 52427, 52428, 52434, 53000, 53202, 53203, 53205,
+    53206, 53211, 53212, 53213, 53221, 53222, 53223, 53224, 53230, 53231,
+    53234, 53235, 53244, 53250, 53252, 53260, 53261, 53262, 53284, 53285,
+    53286, 53287, 53288,
 ]
 
 
@@ -306,46 +148,19 @@ def odredis_zonu(pbr):
 
 cjenik = {
     "Zona 1": {
-        1.0: 2.84 * 1.05,
-        2.0: 3.15 * 1.05,
-        5.0: 3.44 * 1.05,
-        10.0: 4.79 * 1.05,
-        15.0: 5.39 * 1.05,
-        20.0: 6.07 * 1.05,
-        25.0: 6.82 * 1.05,
-        30.0: 7.34 * 1.05,
-        35.0: 8.09 * 1.05,
-        40.0: 8.38 * 1.05,
-        45.0: 8.46 * 1.05,
-        50.0: 9.21 * 1.05,
+        1.0: 2.84 * 1.05, 2.0: 3.15 * 1.05, 5.0: 3.44 * 1.05, 10.0: 4.79 * 1.05,
+        15.0: 5.39 * 1.05, 20.0: 6.07 * 1.05, 25.0: 6.82 * 1.05, 30.0: 7.34 * 1.05,
+        35.0: 8.09 * 1.05, 40.0: 8.38 * 1.05, 45.0: 8.46 * 1.05, 50.0: 9.21 * 1.05,
     },
     "Zona 2": {
-        1.0: 3.31 * 1.05,
-        2.0: 3.80 * 1.05,
-        5.0: 4.19 * 1.05,
-        10.0: 5.54 * 1.05,
-        15.0: 6.29 * 1.05,
-        20.0: 7.18 * 1.05,
-        25.0: 8.09 * 1.05,
-        30.0: 8.68 * 1.05,
-        35.0: 9.59 * 1.05,
-        40.0: 10.04 * 1.05,
-        45.0: 10.49 * 1.05,
-        50.0: 11.24 * 1.05,
+        1.0: 3.31 * 1.05, 2.0: 3.80 * 1.05, 5.0: 4.19 * 1.05, 10.0: 5.54 * 1.05,
+        15.0: 6.29 * 1.05, 20.0: 7.18 * 1.05, 25.0: 8.09 * 1.05, 30.0: 8.68 * 1.05,
+        35.0: 9.59 * 1.05, 40.0: 10.04 * 1.05, 45.0: 10.49 * 1.05, 50.0: 11.24 * 1.05,
     },
     "Zona 3": {
-        1.0: 3.31 * 1.05,
-        2.0: 3.80 * 1.05,
-        5.0: 4.19 * 1.05,
-        10.0: 5.54 * 1.05,
-        15.0: 6.29 * 1.05,
-        20.0: 7.18 * 1.05,
-        25.0: 8.09 * 1.05,
-        30.0: 8.68 * 1.05,
-        35.0: 9.59 * 1.05,
-        40.0: 10.04 * 1.05,
-        45.0: 10.49 * 1.05,
-        50.0: 11.24 * 1.05,
+        1.0: 3.31 * 1.05, 2.0: 3.80 * 1.05, 5.0: 4.19 * 1.05, 10.0: 5.54 * 1.05,
+        15.0: 6.29 * 1.05, 20.0: 7.18 * 1.05, 25.0: 8.09 * 1.05, 30.0: 8.68 * 1.05,
+        35.0: 9.59 * 1.05, 40.0: 10.04 * 1.05, 45.0: 10.49 * 1.05, 50.0: 11.24 * 1.05,
     },
 }
 
@@ -416,7 +231,7 @@ def to_excel(df):
     return output.getvalue()
 
 
-# Funkcija za generiranje PDF izvještaja
+# Funkcija za generiranje PDF izvještaja s korištenjem registriranog DejaVuSans fonta
 def generiraj_pdf_izvjestaj(
     uk_validnih,
     uk_kasni,
@@ -424,9 +239,6 @@ def generiraj_pdf_izvjestaj(
     postotak_kasnjenja,
     uk_naplaceni_transport,
     uk_ugovorena_osnova,
-    popust_posto,
-    iznos_popusta_faktura,
-    ugovorena_osnova_nakon_popusta,
     uk_naplaceno_gorivo,
     ugovoreno_gorivo_nakon_popusta,
     posto_goriva,
@@ -434,22 +246,39 @@ def generiraj_pdf_izvjestaj(
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
     elements = []
-    styles = getSampleStyleSheet()
 
-    # Naslov
+    styles = getSampleStyleSheet()
+    
+    # Prilagodba stilova da koriste registrirani font koji podržava č, ć, š, ž
+    for style_name in styles.byName:
+        st_obj = styles[style_name]
+        st_obj.fontName = FONT_REGULAR
+
     title_style = ParagraphStyle(
         'TitleStyle',
         parent=styles['Heading1'],
+        fontName=FONT_BOLD,
         fontSize=18,
         textColor=colors.HexColor('#1f4e78'),
         spaceAfter=15,
         alignment=1
     )
+    
+    heading2_style = ParagraphStyle(
+        'Heading2Style',
+        parent=styles['Heading2'],
+        fontName=FONT_BOLD,
+        fontSize=14,
+        textColor=colors.HexColor('#1f4e78'),
+        spaceBefore=10,
+        spaceAfter=6
+    )
+
     elements.append(Paragraph("IZVJEŠTAJ 6: SAŽETAK KONTROLE (TRANZIT I CIJENE)", title_style))
     elements.append(Spacer(1, 10))
 
     # Sekcija 1: Tranzit
-    elements.append(Paragraph("<b>1. Analiza rokova isporuke i tranzita</b>", styles['Heading2']))
+    elements.append(Paragraph("<b>1. Analiza rokova isporuke i tranzita</b>", heading2_style))
     tranzit_data = [
         ["Pokazatelj", "Vrijednost"],
         ["Ukupno analizirano pošiljaka s datumima", str(uk_validnih)],
@@ -461,7 +290,8 @@ def generiraj_pdf_izvjestaj(
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1f4e78')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTNAME', (0, 0), (-1, 0), FONT_BOLD),
+        ('FONTNAME', (0, 1), (-1, -1), FONT_REGULAR),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
         ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f2f2f2')),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
@@ -469,22 +299,21 @@ def generiraj_pdf_izvjestaj(
     elements.append(t1)
     elements.append(Spacer(1, 15))
 
-    # Sekcija 2: Transport
-    elements.append(Paragraph("<b>2. Usporedba cijena transporta (Osnova)</b>", styles['Heading2']))
+    # Sekcija 2: Transport (Maknut popust, samo naplaćeno, ugovorena osnova i razlika)
+    elements.append(Paragraph("<b>2. Usporedba cijena transporta (Osnova)</b>", heading2_style))
     transport_data = [
         ["Kategorija", "Iznos (€ bez PDV-a)"],
         ["Ukupno naplaćeni transport (faktura)", f"{uk_naplaceni_transport:,.2f} €"],
         ["Ugovorena osnova po cjeniku (+5%)", f"{uk_ugovorena_osnova:,.2f} €"],
-        [f"Količinski popust ({popust_posto}%)", f"-{iznos_popusta_faktura:,.2f} €"],
-        ["Ugovorena osnova NAKON popusta", f"{ugovorena_osnova_nakon_popusta:,.2f} €"],
-        ["RAZLIKA (Naplaćeno - Treba biti)", f"{(uk_naplaceni_transport - ugovorena_osnova_nakon_popusta):,.2f} €"],
+        ["RAZLIKA (Naplaćeno - Treba biti)", f"{(uk_naplaceni_transport - uk_ugovorena_osnova):,.2f} €"],
     ]
     t2 = Table(transport_data, colWidths=[250, 250])
     t2.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1f4e78')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTNAME', (0, 0), (-1, 0), FONT_BOLD),
+        ('FONTNAME', (0, 1), (-1, -1), FONT_REGULAR),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
         ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f2f2f2')),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
@@ -493,7 +322,7 @@ def generiraj_pdf_izvjestaj(
     elements.append(Spacer(1, 15))
 
     # Sekcija 3: Gorivo
-    elements.append(Paragraph(f"<b>3. Usporedba dodatka za gorivo ({posto_goriva:.1f}%)</b>", styles['Heading2']))
+    elements.append(Paragraph(f"<b>3. Usporedba dodatka za gorivo ({posto_goriva:.1f}%)</b>", heading2_style))
     gorivo_data = [
         ["Kategorija", "Iznos (€ bez PDV-a)"],
         ["Ukupno naplaćeno gorivo na fakturi", f"{uk_naplaceno_gorivo:,.2f} €"],
@@ -505,7 +334,8 @@ def generiraj_pdf_izvjestaj(
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1f4e78')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTNAME', (0, 0), (-1, 0), FONT_BOLD),
+        ('FONTNAME', (0, 1), (-1, -1), FONT_REGULAR),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
         ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f2f2f2')),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
@@ -701,11 +531,9 @@ if uploaded_file is not None:
 
         uk_naplaceni_transport = res_df["Naplaćeni Transport (€)"].sum()
         uk_ugovorena_osnova = res_df["Ugovorena Osnova (€)"].sum()
-        iznos_popusta_faktura = uk_ugovorena_osnova * (popust_posto / 100.0)
-        ugovorena_osnova_nakon_popusta = uk_ugovorena_osnova - iznos_popusta_faktura
-
+        
         uk_naplaceno_gorivo = res_df["Naplaćeno Gorivo (€)"].sum()
-        ugovoreno_gorivo_nakon_popusta = ugovorena_osnova_nakon_popusta * (posto_goriva / 100.0)
+        ugovoreno_gorivo_bez_popusta = uk_ugovorena_osnova * (posto_goriva / 100.0)
 
         pdf_bytes = generiraj_pdf_izvjestaj(
             uk_validnih,
@@ -714,11 +542,8 @@ if uploaded_file is not None:
             postotak_kasnjenja,
             uk_naplaceni_transport,
             uk_ugovorena_osnova,
-            popust_posto,
-            iznos_popusta_faktura,
-            ugovorena_osnova_nakon_popusta,
             uk_naplaceno_gorivo,
-            ugovoreno_gorivo_nakon_popusta,
+            ugovoreno_gorivo_bez_popusta,
             posto_goriva,
         )
 
@@ -765,7 +590,7 @@ if uploaded_file is not None:
             uk_naplacene_dodatne = res_df["Naplaćene Dodatne Usluge Ukupno (€)"].sum()
             sveukupno_naplaceno_racun = uk_naplaceni_transport_val + uk_naplaceno_gorivo_val + uk_naplacene_dodatne
 
-            sveukupno_ocekivano_ugovor = ugovorena_osnova_nakon_popusta + ugovoreno_gorivo_nakon_popusta + uk_naplacene_dodatne
+            sveukupno_ocekivano_ugovor = uk_ugovorena_osnova + ugovoreno_gorivo_bez_popusta + uk_naplacene_dodatne
             konačna_preplata = sveukupno_naplaceno_racun - sveukupno_ocekivano_ugovor
 
             col1, col2, col3 = st.columns(3)
@@ -776,8 +601,7 @@ if uploaded_file is not None:
             st.markdown("---")
             zbirni_detalji = pd.DataFrame([
                 {"Kategorija troška": "Transport (Osnovna cijena - uvećano 5%)", "Što su naplatili (€)": round(uk_naplaceni_transport_val, 2), "Što je trebalo biti (€)": round(uk_ugovorena_osnova, 2)},
-                {"Kategorija troška": f"Količinski popust na fakturu ({popust_posto}%)", "Što su naplatili (€)": 0.00, "Što je trebalo biti (€)": round(-iznos_popusta_faktura, 2)},
-                {"Kategorija troška": f"Dodatak za gorivo ({posto_goriva:.1f}%)", "Što su naplatili (€)": round(uk_naplaceno_gorivo_val, 2), "Što je trebalo biti (€)": round(ugovoreno_gorivo_nakon_popusta, 2)},
+                {"Kategorija troška": f"Dodatak za gorivo ({posto_goriva:.1f}%)", "Što su naplatili (€)": round(uk_naplaceno_gorivo_val, 2), "Što je trebalo biti (€)": round(ugovoreno_gorivo_bez_popusta, 2)},
                 {"Kategorija troška": "Sve dodatne usluge (CODC, OVWT, SMS...)", "Što su naplatili (€)": round(uk_naplacene_dodatne, 2), "Što je trebalo biti (€)": round(uk_naplacene_dodatne, 2)},
                 {"Kategorija troška": "SVEUKUPNO ZA CIJELU FAKTURU", "Što su naplatili (€)": round(sveukupno_naplaceno_racun, 2), "Što je trebalo biti (€)": round(sveukupno_ocekivano_ugovor, 2)},
             ])
@@ -800,9 +624,9 @@ if uploaded_file is not None:
             
             col_x, col_y = st.columns(2)
             with col_x:
-                st.metric(label="Razlika u Transportu", value=f"{(uk_naplaceni_transport - ugovorena_osnova_nakon_popusta):,.2f} €")
+                st.metric(label="Razlika u Transportu", value=f"{(uk_naplaceni_transport - uk_ugovorena_osnova):,.2f} €")
             with col_y:
-                st.metric(label="Razlika u Gorivu", value=f"{(uk_naplaceno_gorivo - ugovoreno_gorivo_nakon_popusta):,.2f} €")
+                st.metric(label="Razlika u Gorivu", value=f"{(uk_naplaceno_gorivo - ugovoreno_gorivo_bez_popusta):,.2f} €")
 
             st.markdown("---")
             st.download_button(

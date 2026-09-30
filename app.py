@@ -8,11 +8,158 @@ st.set_page_config(
 
 st.title("📦 Sustav za Kontrolu i Analizu Logističkih Računa")
 st.write(
-    "Učitaj mjesečnu tablicu pošiljaka. Cjenik je ažuriran i uvećan za 5%."
+    "Učitaj mjesečnu tablicu pošiljaka. Zoneske liste su u potpunosti"
+    " usklađene sa službenim cjenicima i tablicama (Zagreb, Zona 2, Zona 3 sa"
+    " +25%)."
 )
 
-# Definiranje Zona 3 prema tablici (otoci i posebni režim dostave)
+# --- SLUŽBENE LISTE POŠTANSKIh BROJEVA ---
+
+# Zona 1: Zagreb i uži prsten (10000 - 10450)
+# Zona 2: Službeni popis iz priložene tablice (Ostataak HR / specifična područja)
+zona_2_pbr = [
+    20210,
+    20213,
+    20231,
+    20216,
+    20000,
+    20215,
+    20207,
+    20236,
+    20234,
+    20218,
+    20217,
+    20232,
+    20205,
+    20233,
+    20235,
+    21430,
+    21450,
+    21460,
+    21465,
+    21467,
+    21480,
+    21483,
+    21485,
+    22232,
+    22233,
+    22234,
+    22235,
+    22236,
+    23211,
+    23212,
+    23249,
+    23262,
+    23263,
+    23264,
+    23271,
+    23272,
+    23273,
+    23274,
+    23275,
+    23276,
+    23281,
+    23282,
+    23283,
+    23284,
+    23285,
+    23291,
+    23292,
+    23293,
+    23294,
+    23295,
+    23296,
+    51500,
+    51511,
+    51512,
+    51513,
+    51514,
+    51515,
+    51516,
+    51517,
+    51521,
+    51522,
+    51523,
+    51531,
+    51532,
+    51533,
+    51540,
+    51550,
+    51551,
+    51552,
+    51553,
+    51554,
+    51555,
+    51556,
+    51557,
+    51610,
+    51611,
+    51612,
+    51613,
+    51614,
+    51615,
+    51616,
+    51617,
+    51618,
+    51619,
+    53291,
+    53294,
+    53296,
+]
+
+# Zona 3: Službeni popis otoka i posebnih zona iz priložene tablice (+25%)
 zona_3_pbr = [
+    20221,
+    20222,
+    20223,
+    20224,
+    20225,
+    20226,
+    20240,
+    20242,
+    20243,
+    20245,
+    20250,
+    20260,
+    20263,
+    20264,
+    20266,
+    20269,
+    20270,
+    20271,
+    20272,
+    20273,
+    20274,
+    20290,
+    21400,
+    21410,
+    21420,
+    21423,
+    21424,
+    21425,
+    21426,
+    21431,
+    21432,
+    21453,
+    21454,
+    21455,
+    21456,
+    21457,
+    21462,
+    21463,
+    21469,
+    21470,
+    21473,
+    22230,
+    22240,
+    22243,
+    22244,
+    23250,
+    23251,
+    23252,
+    23261,
+    51280,
+    51558,
     20210,
     20213,
     20231,
@@ -33,19 +180,22 @@ zona_3_pbr = [
 
 def odredis_zonu(pbr):
   try:
-    pbr = int(pbr)
+    pbr_int = int(pbr)
   except:
     return "Zona 2"
 
-  if pbr in zona_3_pbr:
+  if pbr_int in zona_3_pbr:
     return "Zona 3"
-  elif 10000 <= pbr <= 10450:
+  elif pbr_int in zona_2_pbr:
+    return "Zona 2"
+  elif 10000 <= pbr_int <= 10450:
     return "Zona 1"
   else:
+    # Ukoliko je neki poštanski broj izvan zona, automatski ga tretiramo kao Zonu 2 (Ostatak HR)
     return "Zona 2"
 
 
-# Ugovoreni cjenik po zonama i masama (uvećan za 5%, bez PDV-a)
+# --- UGOVORENI CJENIK (uvećan za 5%, bez PDV-a) ---
 cjenik = {
     "Zona 1": {
         1.0: 2.84 * 1.05,
@@ -160,7 +310,7 @@ def to_excel(df):
   return output.getvalue()
 
 
-# Bočna traka
+# --- BOČNA TRAKA ---
 st.sidebar.header("Parametri obračuna")
 trenutna_cijena_goriva = st.sidebar.number_input(
     "Prosječna cijena goriva (€ bez PDV-a):",
@@ -317,7 +467,7 @@ if uploaded_file is not None:
         "⚖️ 2. Izvještaj: Usporedba svih cijena",
         "🚨 3. Izvještaj: Samo razlike i preplate",
         "📈 4. Izvještaj: Zbirne sume fakture",
-        "🛠️️ 5. Izvještaj: Dodatne usluge",
+        "🛠️ 5. Izvještaj: Dodatne usluge",
     ])
 
     # --- TAB 1: TRANZIT PO ZONAMA ---
@@ -436,7 +586,9 @@ if uploaded_file is not None:
 
       zbirni_detalji = pd.DataFrame([
           {
-              "Kategorija troška": "Transport (Osnovna cijena - uvećano 5%)",
+              "Kategorija troška": (
+                  "Transport (Osnovna cijena - ugovoreno +5%)"
+              ),
               "Što su naplatili (€)": round(uk_naplaceni_transport, 2),
               "Što je trebalo biti (€)": round(uk_ugovorena_osnova, 2),
           },

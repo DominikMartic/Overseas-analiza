@@ -18,7 +18,7 @@ st.write(
 # Učitavanje dopuštenih dana isporuke po poštanskim brojevima iz tablice
 @st.cache_data
 def ucitaj_dopucene_rokove():
-   moguce_nazive = [
+  moguce_nazive = [
       "mjesto, dani isporuke.xlsx",
       "mjesto,_dani_isporuke.xlsx",
       "dani isporuke.xlsx",
@@ -46,8 +46,12 @@ def ucitaj_dopucene_rokove():
 
   if df_rokovi is not None:
     try:
-      pbr_col = next((c for c in df_rokovi.columns if "poštanski" in c.lower()), None)
-      dostava_col = next((c for c in df_rokovi.columns if "dostava" in c.lower()), None)
+      pbr_col = next(
+          (c for c in df_rokovi.columns if "poštanski" in c.lower()), None
+      )
+      dostava_col = next(
+          (c for c in df_rokovi.columns if "dostava" in c.lower()), None
+      )
 
       if pbr_col and dostava_col:
         r_dict = {}
@@ -571,7 +575,7 @@ if uploaded_file is not None:
           ugovorena_osnova + ugovoreno_gorivo + zbroj_naplacenih_dodatnih
       )
       red_podataka["Sveukupno Očekivano (€)"] = round(očekivano_sveukupno, 2)
-      red_podataka["Ima Dodatnih Usluga"] = postoji_dodatna_naplata
+      red_podataka["Ima Dodatnych Usluga"] = postoji_dodatna_naplata
 
       rezultati.append(red_podataka)
 

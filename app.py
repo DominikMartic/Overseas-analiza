@@ -1,4 +1,5 @@
 import io
+import os
 import re
 import pandas as pd
 import streamlit as st
@@ -17,44 +18,70 @@ st.write(
 # Učitavanje dopuštenih dana isporuke po poštanskim brojevima iz tablice
 @st.cache_data
 def ucitaj_dopucene_rokove():
-  # Ovdje pretpostavljamo da se tablica "mjesto, dani isporuke.xlsx" nalazi u istom direktoriju
-  try:
-    df_rokovi = pd.read_excel("mjesto, dani isporuke.xlsx")
-    pbr_col = next((c for c in df_rokovi.columns if "poštanski" in c.lower()), None)
-    dostava_col = next((c for c in df_rokovi.columns if "dostava" in c.lower()), None)
+   moguce_nazive = [
+      "mjesto, dani isporuke.xlsx",
+      "mjesto,_dani_isporuke.xlsx",
+      "dani isporuke.xlsx",
+  ]
+  df_rokovi = None
+  for naziv in moguce_nazive:
+    if os.path.exists(naziv):
+      try:
+        df_rokovi = pd.read_excel(naziv)
+        break
+      except:
+        continue
 
-    if pbr_col and dostava_col:
-      r_dict = {}
-      for _, row in df_rokovi.iterrows():
+  # Ako nije našlo po imenu, traži bilo koji xlsx koji ima 'dani' u imenu
+  if df_rokovi is None:
+    for f in os.listdir("."):
+      if f.endswith(".xlsx") and (
+          "dani" in f.lower() or "isporuke" in f.lower() or "mjesto" in f.lower()
+      ):
         try:
-          pbr = int(row[pbr_col])
-          val_str = str(row[dostava_col])
-          match = re.search(r"(\d+)\s*//", val_str)
-          if match:
-            dani = int(match.group(1))
-          else:
-            match_any = re.search(r"(\d+)", val_str)
-            dani = int(match_any.group(1)) if match_any else 1
-          
-          # Uzimamo maksimalni dopušteni rok ako postoji više naselja za isti PBR
-          if pbr in r_dict:
-            r_dict[pbr] = max(r_dict[pbr], dani)
-          else:
-            r_dict[pbr] = dani
+          df_rokovi = pd.read_excel(f)
+          break
         except:
           continue
-      return r_dict
-  except Exception as e:
-    st.warning(
-        f"Napomena: Datoteka 'mjesto, dani isporuke.xlsx' nije pronađena ili je"
-        f" greška: {e}. Koristit će se standardni zadani rokovi."
-    )
+
+  if df_rokovi is not None:
+    try:
+      pbr_col = next((c for c in df_rokovi.columns if "poštanski" in c.lower()), None)
+      dostava_col = next((c for c in df_rokovi.columns if "dostava" in c.lower()), None)
+
+      if pbr_col and dostava_col:
+        r_dict = {}
+        for _, row in df_rokovi.iterrows():
+          try:
+            pbr = int(row[pbr_col])
+            val_str = str(row[dostava_col])
+            match = re.search(r"(\d+)\s*//", val_str)
+            if match:
+              dani = int(match.group(1))
+            else:
+              match_any = re.search(r"(\d+)", val_str)
+              dani = int(match_any.group(1)) if match_any else 1
+
+            if pbr in r_dict:
+              r_dict[pbr] = max(r_dict[pbr], dani)
+            else:
+              r_dict[pbr] = dani
+          except:
+            continue
+        return r_dict
+    except Exception as e:
+      st.warning(f"Greška pri parsiranju rokova: {e}")
+
+  st.warning(
+      "Datoteka 'mjesto, dani isporuke.xlsx' nije pronađena. Koristit će se"
+      " standardni zadani rokovi."
+  )
   return {}
 
 
 dopusteni_rokovi_dict = ucitaj_dopucene_rokove()
 
-# Službene liste poštanskih brojeva za Zonu 2 i Zonu 3 prema dostavljenim tablicama
+# Službene liste poštanskih brojeva za Zonu 2 i Zonu 3
 zona_3_pbr = [
     20230,
     20240,
@@ -265,10 +292,9 @@ def odredis_zonu(pbr):
   elif 10000 <= pbr <= 10450:
     return "Zona 1"
   else:
-    return "Zona 2"  # Ostatak kopnene Hrvatske
+    return "Zona 2"
 
 
-# Ugovoreni cjenik po zonama i masama (uvećan za 5%, bez PDV-a)
 cjenik = {
     "Zona 1": {
         1.0: 2.84 * 1.05,
@@ -381,7 +407,6 @@ def to_excel(df):
   return output.getvalue()
 
 
-# Bočna traka
 st.sidebar.header("Parametri obračuna")
 trenutna_cijena_goriva = st.sidebar.number_input(
     "Prosječna cijena goriva (€ bez PDV-a):",
@@ -410,7 +435,6 @@ if uploaded_file is not None:
   if st.button("Generiraj izvještaje"):
     rezultati = []
     ukupno_pošiljaka = len(df)
-
     ukupno_kartona = (
         int(df["Number of Parcels"].sum())
         if "Number of Parcels" in df.columns
@@ -461,7 +485,6 @@ if uploaded_file is not None:
       d_dostave = row.get("Delivery Time", None)
       tranzit_dani = izracunaj_radne_dane(d_slanja, d_dostave)
 
-      # Dohvat dopuštenog roka za PBR (ako nema u tablici, zadano je 1 dan za Z1, 2 za Z2/3)
       dopušteni_rok = dopusteni_rokovi_dict.get(
           pbr_int, (1 if 10000 <= pbr_int <= 10450 else 2)
       )
@@ -562,13 +585,11 @@ if uploaded_file is not None:
         "🛠 5. Izvještaj: Dodatne usluge",
     ])
 
-    # --- TAB 1: TRANZIT I ROKOVI ISPORUKE ---
     with tab1:
       st.subheader(
           "Analiza tranzita pošiljaka i provjera ugovorenih rokova isporuke"
       )
 
-      # Izračun postotka kašnjenja
       valid_tranzit = res_df[res_df["Stvarni Tranzit (dani)"] >= 0]
       uk_validnih = len(valid_tranzit)
       if uk_validnih > 0:
@@ -622,7 +643,6 @@ if uploaded_file is not None:
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       )
 
-    # --- TAB 2: USPOREDBA SVIH CIJENA ---
     with tab2:
       st.subheader("Detaljna usporedba za sve pošiljke")
       st.dataframe(res_df, use_container_width=True)
@@ -633,7 +653,6 @@ if uploaded_file is not None:
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       )
 
-    # --- TAB 3: SAMO RAZLIKE I PREPLATE ---
     with tab3:
       st.subheader(
           "Izdvojene preplate na transportu, gorivu i dodatnim uslugama"
@@ -651,7 +670,6 @@ if uploaded_file is not None:
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       )
 
-    # --- TAB 4: ZBIRNE SUME FAKTURE ---
     with tab4:
       st.subheader(
           "📈 Zbirni financijski pregled cijele fakture (Sve cijene bez PDV-a)"
@@ -739,7 +757,6 @@ if uploaded_file is not None:
           ),
       )
 
-    # --- TAB 5: DODATNE USLUGE ---
     with tab5:
       st.subheader("🛠️ Izvještaj pošiljaka s naplaćenim dodatnim uslugama")
       dodatne_df = res_df[res_df["Ima Dodatnih Usluga"] == True]

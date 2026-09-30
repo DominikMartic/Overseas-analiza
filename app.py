@@ -1,4 +1,5 @@
 import io
+import re
 import pandas as pd
 import streamlit as st
 
@@ -8,47 +9,108 @@ st.set_page_config(
 
 st.title("📦 Sustav za Kontrolu i Analizu Logističkih Računa")
 st.write(
-    "Učitaj mjesečnu tablicu pošiljaka. Zoneske liste su u potpunosti"
-    " usklađene sa službenim cjenicima i tablicama (Zagreb, Zona 2, Zona 3 sa"
-    " +25%)."
+    "Učitaj mjesečnu tablicu pošiljaka. Cjenik je uvećan za 5%, a tranzit se"
+    " automatski kontrolira prema ugovorenim rokovima."
 )
 
-# --- SLUŽBENE LISTE POŠTANSKIh BROJEVA ---
 
-# Zona 1: Zagreb i uži prsten (10000 - 10450)
-# Zona 2: Službeni popis iz priložene tablice (Ostataak HR / specifična područja)
-zona_2_pbr = [
-    20210,
-    20213,
-    20231,
-    20216,
-    20000,
-    20215,
-    20207,
-    20236,
-    20234,
-    20218,
-    20217,
-    20232,
-    20205,
-    20233,
-    20235,
-    21430,
+# Učitavanje dopuštenih dana isporuke po poštanskim brojevima iz tablice
+@st.cache_data
+def ucitaj_dopucene_rokove():
+  # Ovdje pretpostavljamo da se tablica "mjesto, dani isporuke.xlsx" nalazi u istom direktoriju
+  try:
+    df_rokovi = pd.read_excel("mjesto, dani isporuke.xlsx")
+    pbr_col = next((c for c in df_rokovi.columns if "poštanski" in c.lower()), None)
+    dostava_col = next((c for c in df_rokovi.columns if "dostava" in c.lower()), None)
+
+    if pbr_col and dostava_col:
+      r_dict = {}
+      for _, row in df_rokovi.iterrows():
+        try:
+          pbr = int(row[pbr_col])
+          val_str = str(row[dostava_col])
+          match = re.search(r"(\d+)\s*//", val_str)
+          if match:
+            dani = int(match.group(1))
+          else:
+            match_any = re.search(r"(\d+)", val_str)
+            dani = int(match_any.group(1)) if match_any else 1
+          
+          # Uzimamo maksimalni dopušteni rok ako postoji više naselja za isti PBR
+          if pbr in r_dict:
+            r_dict[pbr] = max(r_dict[pbr], dani)
+          else:
+            r_dict[pbr] = dani
+        except:
+          continue
+      return r_dict
+  except Exception as e:
+    st.warning(
+        f"Napomena: Datoteka 'mjesto, dani isporuke.xlsx' nije pronađena ili je"
+        f" greška: {e}. Koristit će se standardni zadani rokovi."
+    )
+  return {}
+
+
+dopusteni_rokovi_dict = ucitaj_dopucene_rokove()
+
+# Službene liste poštanskih brojeva za Zonu 2 i Zonu 3 prema dostavljenim tablicama
+zona_3_pbr = [
+    20230,
+    20240,
+    20242,
+    20243,
+    20244,
+    20245,
+    20246,
+    20247,
+    20248,
+    20250,
+    20260,
+    20263,
+    20264,
+    20267,
+    20269,
+    20270,
+    20271,
+    20272,
+    20273,
+    20274,
+    20275,
+    21400,
+    21403,
+    21404,
+    21405,
+    21410,
+    21412,
+    21413,
+    21420,
+    21423,
+    21424,
+    21425,
+    21426,
     21450,
+    21454,
     21460,
+    21462,
+    21463,
     21465,
+    21466,
     21467,
+    21468,
+    21469,
     21480,
     21483,
     21485,
-    22232,
-    22233,
-    22234,
-    22235,
-    22236,
-    23211,
+    22240,
+    22242,
+    22243,
+    22244,
     23212,
+    23234,
     23249,
+    23250,
+    23251,
     23262,
     23263,
     23264,
@@ -57,18 +119,8 @@ zona_2_pbr = [
     23273,
     23274,
     23275,
-    23276,
-    23281,
-    23282,
-    23283,
-    23284,
-    23285,
-    23291,
-    23292,
-    23293,
-    23294,
-    23295,
-    23296,
+    51280,
+    51281,
     51500,
     51511,
     51512,
@@ -80,122 +132,143 @@ zona_2_pbr = [
     51521,
     51522,
     51523,
-    51531,
-    51532,
-    51533,
-    51540,
     51550,
     51551,
-    51552,
-    51553,
     51554,
     51555,
     51556,
     51557,
-    51610,
-    51611,
-    51612,
-    51613,
-    51614,
-    51615,
-    51616,
-    51617,
-    51618,
-    51619,
+    51559,
+    51564,
     53291,
     53294,
     53296,
 ]
 
-# Zona 3: Službeni popis otoka i posebnih zona iz priložene tablice (+25%)
-zona_3_pbr = [
-    20221,
-    20222,
-    20223,
-    20224,
-    20225,
-    20226,
-    20240,
-    20242,
-    20243,
-    20245,
-    20250,
-    20260,
-    20263,
-    20264,
-    20266,
-    20269,
-    20270,
-    20271,
-    20272,
-    20273,
-    20274,
-    20290,
-    21400,
-    21410,
-    21420,
-    21423,
-    21424,
-    21425,
-    21426,
-    21431,
-    21432,
-    21453,
-    21454,
-    21455,
-    21456,
-    21457,
-    21462,
-    21463,
-    21469,
-    21470,
-    21473,
-    22230,
-    22240,
-    22243,
-    22244,
-    23250,
-    23251,
-    23252,
-    23261,
-    51280,
-    51558,
-    20210,
-    20213,
-    20231,
-    20216,
-    20000,
-    20215,
-    20207,
-    20236,
-    20234,
-    20218,
-    20217,
-    20232,
-    20205,
-    20233,
-    20235,
+zona_2_pbr = [
+    23440,
+    23445,
+    23446,
+    31300,
+    31321,
+    31322,
+    31323,
+    31324,
+    31542,
+    31543,
+    31555,
+    43270,
+    43271,
+    43273,
+    44202,
+    44203,
+    44210,
+    44213,
+    44214,
+    44221,
+    44222,
+    44251,
+    44271,
+    44272,
+    44273,
+    44400,
+    44401,
+    44402,
+    44412,
+    44425,
+    44430,
+    44450,
+    47220,
+    47221,
+    47222,
+    47245,
+    47246,
+    47304,
+    47305,
+    47306,
+    47307,
+    47313,
+    47314,
+    48260,
+    48265,
+    48267,
+    48323,
+    51212,
+    51213,
+    51251,
+    51300,
+    51311,
+    51312,
+    51313,
+    51314,
+    51315,
+    51316,
+    51321,
+    51322,
+    51323,
+    51324,
+    51325,
+    51328,
+    51329,
+    51414,
+    51418,
+    52000,
+    52402,
+    52420,
+    52421,
+    52422,
+    52425,
+    52426,
+    52427,
+    52428,
+    52434,
+    53000,
+    53202,
+    53203,
+    53205,
+    53206,
+    53211,
+    53212,
+    53213,
+    53221,
+    53222,
+    53223,
+    53224,
+    53230,
+    53231,
+    53234,
+    53235,
+    53244,
+    53250,
+    53252,
+    53260,
+    53261,
+    53262,
+    53284,
+    53285,
+    53286,
+    53287,
+    53288,
 ]
 
 
 def odredis_zonu(pbr):
   try:
-    pbr_int = int(pbr)
+    pbr = int(pbr)
   except:
     return "Zona 2"
 
-  if pbr_int in zona_3_pbr:
+  if pbr in zona_3_pbr:
     return "Zona 3"
-  elif pbr_int in zona_2_pbr:
+  elif pbr in zona_2_pbr:
     return "Zona 2"
-  elif 10000 <= pbr_int <= 10450:
+  elif 10000 <= pbr <= 10450:
     return "Zona 1"
   else:
-    # Ukoliko je neki poštanski broj izvan zona, automatski ga tretiramo kao Zonu 2 (Ostatak HR)
-    return "Zona 2"
+    return "Zona 2"  # Ostatak kopnene Hrvatske
 
 
-# --- UGOVORENI CJENIK (uvećan za 5%, bez PDV-a) ---
+# Ugovoreni cjenik po zonama i masama (uvećan za 5%, bez PDV-a)
 cjenik = {
     "Zona 1": {
         1.0: 2.84 * 1.05,
@@ -264,14 +337,12 @@ def izracunaj_osnovnu_cijenu(masa, zona):
     )
     osnova = baza + višak * dodatak_po_kg
 
-  # Uvjet za Zonu 3: na početnu cijenu dodaje se 25%
   if zona == "Zona 3":
     osnova = osnova * 1.25
 
   return osnova
 
 
-# Izračun postotka goriva prema razredima
 fn_gorivo = lambda c: (
     0.0
     if c <= 1.35
@@ -296,11 +367,11 @@ def izracunaj_radne_dane(datum_slanja, datum_dostave):
     d1 = pd.to_datetime(datum_slanja, format="%d.%m.%Y", errors="coerce")
     d2 = pd.to_datetime(datum_dostave, format="%d.%m.%Y", errors="coerce")
     if pd.isna(d1) or pd.isna(d2):
-      return "Nema informacije"
+      return None
     radni_dani = pd.bdate_range(start=d1, end=d2).shape[0] - 1
     return max(0, radni_dani)
   except:
-    return "Nema informacije"
+    return None
 
 
 def to_excel(df):
@@ -310,7 +381,7 @@ def to_excel(df):
   return output.getvalue()
 
 
-# --- BOČNA TRAKA ---
+# Bočna traka
 st.sidebar.header("Parametri obračuna")
 trenutna_cijena_goriva = st.sidebar.number_input(
     "Prosječna cijena goriva (€ bez PDV-a):",
@@ -324,7 +395,6 @@ st.sidebar.info(
     f"Izračunati dodatak za gorivo prema razredima: **{posto_goriva:.1f}%**"
 )
 
-# Učitavanje datoteke
 uploaded_file = st.file_uploader(
     "Učitaj Excel ili CSV tablicu s pošiljkama", type=["xlsx", "csv"]
 )
@@ -378,6 +448,11 @@ if uploaded_file is not None:
 
     for idx, row in df.iterrows():
       pbr = row.get("Consignee ZIP Code", 10000)
+      try:
+        pbr_int = int(pbr)
+      except:
+        pbr_int = 10000
+
       masa = float(row.get("Weight", 0.0))
       naplaceni_transport = float(row.get("Transport Price", 0.0))
       naplaceno_gorivo = float(row.get("Fuel Surcharge", 0.0))
@@ -386,13 +461,26 @@ if uploaded_file is not None:
       d_dostave = row.get("Delivery Time", None)
       tranzit_dani = izracunaj_radne_dane(d_slanja, d_dostave)
 
-      zona = odredis_zonu(pbr)
+      # Dohvat dopuštenog roka za PBR (ako nema u tablici, zadano je 1 dan za Z1, 2 za Z2/3)
+      dopušteni_rok = dopusteni_rokovi_dict.get(
+          pbr_int, (1 if 10000 <= pbr_int <= 10450 else 2)
+      )
 
-      # Očekivane ugovorene vrijednosti po novom cjeniku (+5%)
+      if tranzit_dani is not None:
+        kasni = tranzit_dani > dopušteni_rok
+        tranzit_status = (
+            f"{tranzit_dani} rad. dana (U roku)"
+            if not kasni
+            else f"🔴 {tranzit_dani} rad. dana (Kasni, rok je {dopušteni_rok})"
+        )
+      else:
+        kasni = False
+        tranzit_status = "Nema informacije"
+
+      zona = odredis_zonu(pbr_int)
       ugovorena_osnova = izracunaj_osnovnu_cijenu(masa, zona)
       ugovoreno_gorivo = ugovorena_osnova * (posto_goriva / 100.0)
 
-      # Zbrajanje svih naplaćenih dodatnih usluga za ovu pošiljku
       zbroj_naplacenih_dodatnih = 0.0
       postoji_dodatna_naplata = False
 
@@ -403,12 +491,17 @@ if uploaded_file is not None:
           "Consignee Town": row.get("Consignee Town", ""),
           "Number of Parcels": row.get("Number of Parcels", 1),
           "Reference 1": row.get("Reference 1", ""),
-          "ZIP": pbr,
+          "ZIP": pbr_int,
           "Zona": zona,
           "Masa (kg)": masa,
           "Slanje": d_slanja,
           "Dostava": d_dostave,
-          "Tranzit (radni dani)": tranzit_dani,
+          "Stvarni Tranzit (dani)": (
+              tranzit_dani if tranzit_dani is not None else -1
+          ),
+          "Dopušteni Rok (dani)": dopušteni_rok,
+          "Status Dostave": tranzit_status,
+          "Kasni": kasni,
           "Naplaćeni Transport (€)": round(naplaceni_transport, 2),
           "Ugovorena Osnova (€)": round(ugovorena_osnova, 2),
           "Naplaćeno Gorivo (€)": round(naplaceno_gorivo, 2),
@@ -455,44 +548,77 @@ if uploaded_file is not None:
           ugovorena_osnova + ugovoreno_gorivo + zbroj_naplacenih_dodatnih
       )
       red_podataka["Sveukupno Očekivano (€)"] = round(očekivano_sveukupno, 2)
-
       red_podataka["Ima Dodatnih Usluga"] = postoji_dodatna_naplata
+
       rezultati.append(red_podataka)
 
     res_df = pd.DataFrame(rezultati)
 
-    # Kreiranje 5 taba (izvještaja)
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "📊 1. Izvještaj: Tranzit po zonama",
+        "📊 1. Izvještaj: Tranzit i rokovi isporuke",
         "⚖️ 2. Izvještaj: Usporedba svih cijena",
         "🚨 3. Izvještaj: Samo razlike i preplate",
         "📈 4. Izvještaj: Zbirne sume fakture",
-        "🛠️ 5. Izvještaj: Dodatne usluge",
+        "🛠 5. Izvještaj: Dodatne usluge",
     ])
 
-    # --- TAB 1: TRANZIT PO ZONAMA ---
+    # --- TAB 1: TRANZIT I ROKOVI ISPORUKE ---
     with tab1:
-      st.subheader("Analiza tranzita pošiljaka po zonama (u radnim danima)")
+      st.subheader(
+          "Analiza tranzita pošiljaka i provjera ugovorenih rokova isporuke"
+      )
+
+      # Izračun postotka kašnjenja
+      valid_tranzit = res_df[res_df["Stvarni Tranzit (dani)"] >= 0]
+      uk_validnih = len(valid_tranzit)
+      if uk_validnih > 0:
+        uk_kasni = valid_tranzit["Kasni"].sum()
+        postotak_kasnjenja = (uk_kasni / uk_validnih) * 100.0
+        postotak_urednih = 100.0 - postotak_kasnjenja
+      else:
+        uk_kasni = 0
+        postotak_kasnjenja = 0.0
+        postotak_urednih = 100.0
+
+      col_a, col_b, col_c = st.columns(3)
+      col_a.metric(
+          label="Uredno isporučeno u roku",
+          value=f"{postotak_urednih:.1f}%",
+          delta=f"{uk_validnih - uk_kasni} pošiljaka",
+      )
+      col_b.metric(
+          label="Izvan ugovorenog roka (Kašnjenje)",
+          value=f"{postotak_kasnjenja:.1f}%",
+          delta=f"-{uk_kasni} pošiljaka",
+          delta_color="inverse",
+      )
+      col_c.metric(
+          label="Ukupno analizirano pošiljaka s datumima",
+          value=f"{uk_validnih}",
+      )
+
+      st.markdown("---")
+
       tranzit_view = res_df[
           [
               "RedniBroj",
               "Shipment ID",
               "Consignee Name",
               "Consignee Town",
-              "Number of Parcels",
-              "Reference 1",
               "ZIP",
               "Zona",
               "Slanje",
               "Dostava",
-              "Tranzit (radni dani)",
+              "Stvarni Tranzit (dani)",
+              "Dopušteni Rok (dani)",
+              "Status Dostave",
           ]
       ]
       st.dataframe(tranzit_view, use_container_width=True)
       st.download_button(
           "📥 Preuzmi Izvještaj 1 (Excel)",
           to_excel(tranzit_view),
-          "tranzit_po_zonama.xlsx",
+          "analiza_tranzita_i_rokova.xlsx",
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       )
 
@@ -525,13 +651,11 @@ if uploaded_file is not None:
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       )
 
-    # --- TAB 4: ZBIRNE SUME FAKTURE (BEZ PDV-a SA POPUSTOM NA KRAJU) ---
+    # --- TAB 4: ZBIRNE SUME FAKTURE ---
     with tab4:
       st.subheader(
           "📈 Zbirni financijski pregled cijele fakture (Sve cijene bez PDV-a)"
       )
-
-      # Sumiranje po stavkama s računa (što su naplatili)
       uk_naplaceni_transport = res_df["Naplaćeni Transport (€)"].sum()
       uk_naplaceno_gorivo = res_df["Naplaćeno Gorivo (€)"].sum()
       uk_naplacene_dodatne = res_df["Naplaćene Dodatne Usluge Ukupno (€)"].sum()
@@ -539,34 +663,23 @@ if uploaded_file is not None:
           uk_naplaceni_transport + uk_naplaceno_gorivo + uk_naplacene_dodatne
       )
 
-      # Sumiranje po ugovoru (što je trebalo biti)
       uk_ugovorena_osnova = res_df["Ugovorena Osnova (€)"].sum()
-      uk_ugovoreno_gorivo = res_df["Ugovoreno Gorivo (€)"].sum()
-
-      # Primjena popusta na UKUPNU zbrojenu osnovicu transporta na razini fakture
       iznos_popusta_faktura = uk_ugovorena_osnova * (popust_posto / 100.0)
       ugovorena_osnova_nakon_popusta = (
           uk_ugovorena_osnova - iznos_popusta_faktura
       )
-
-      # Preračun goriva nakon popusta na osnovu
       ugovoreno_gorivo_nakon_popusta = ugovorena_osnova_nakon_popusta * (
           posto_goriva / 100.0
       )
-
-      # Sveukupno očekivano po ugovoru nakon popusta na cijelu fakturu
       sveukupno_ocekivano_ugovor = (
           ugovorena_osnova_nakon_popusta
           + ugovoreno_gorivo_nakon_popusta
           + uk_naplacene_dodatne
       )
-
-      # Konačna preplata / razlika
       konačna_preplata = (
           sveukupno_naplaceno_racun - sveukupno_ocekivano_ugovor
       )
 
-      # Prikaz preko metrika
       col1, col2, col3 = st.columns(3)
       col1.metric(
           label="Sveukupno su naplatili (Bez PDV-a)",
@@ -583,12 +696,9 @@ if uploaded_file is not None:
 
       st.markdown("---")
       st.markdown("### Detaljna struktura zbroja fakture:")
-
       zbirni_detalji = pd.DataFrame([
           {
-              "Kategorija troška": (
-                  "Transport (Osnovna cijena - ugovoreno +5%)"
-              ),
+              "Kategorija troška": "Transport (Osnovna cijena - uvećano 5%)",
               "Što su naplatili (€)": round(uk_naplaceni_transport, 2),
               "Što je trebalo biti (€)": round(uk_ugovorena_osnova, 2),
           },
@@ -619,9 +729,7 @@ if uploaded_file is not None:
               "Što je trebalo biti (€)": round(sveukupno_ocekivano_ugovor, 2),
           },
       ])
-
       st.dataframe(zbirni_detalji, use_container_width=True)
-
       st.download_button(
           label="📥 Preuzmi Zbirni Financijski Izvještaj (Excel)",
           data=to_excel(zbirni_detalji),
@@ -635,7 +743,6 @@ if uploaded_file is not None:
     with tab5:
       st.subheader("🛠️ Izvještaj pošiljaka s naplaćenim dodatnim uslugama")
       dodatne_df = res_df[res_df["Ima Dodatnih Usluga"] == True]
-
       if dodatne_df.empty:
         st.success("Nema pošiljaka s naplaćenim dodatnim uslugama u ovoj tablici!")
       else:

@@ -1,4 +1,5 @@
 import io
+import math
 import os
 import re
 import pandas as pd
@@ -38,18 +39,18 @@ try:
             FONT_BOLD = "DejaVuSans-Bold"
         else:
             st.error(
-                "⚠️ Upozorenje: Datoteke 'DejaVuSans.ttf' i 'DejaVuSans-Bold.ttf'"
-                " nisu pronađene u direktoriju aplikacije! Hrvatska slova (č, ć,"
-                " š, ž) možda se neće ispravno prikazati u PDF-u dok ne ubaciš"
-                " te fontove u folder."
+                "⚠️ Upozorenje: Datoteke 'DejaVuSans.ttf' i 'DejaVuSans-Bold.ttf' "
+                "nisu pronađene u direktoriju aplikacije! Hrvatska slova (č, ć, "
+                "š, ž) možda se neće ispravno prikazati u PDF-u dok ne ubaciš "
+                "te fontove u folder."
             )
 except Exception as e:
     st.warning(f"Greška pri registraciji fonta: {e}")
 
 st.title("📦 Sustav za Kontrolu i Analizu Logističkih Računa")
 st.write(
-    "Učitaj mjesečnu tablicu pošiljaka. Cjenik je uvećan za 5%, a tranzit se"
-    " automatski kontrolira prema ugovorenim rokovima."
+    "Učitaj mjesečnu tablicu pošiljaka. Cjenik je uvećan za 5%, a tranzit se "
+    "automatski kontrolira prema ugovorenim rokovima."
 )
 
 
@@ -197,10 +198,12 @@ def izracunaj_osnovnu_cijenu(masa, zona):
     else:
         baza = z_tablica[50.0]
         višak = masa - 50.0
+        # Zaokruživanje viška na viši cijeli broj (npr. 13.18 -> 14)
+        višak_zaokružen = math.ceil(višak)
         dodatak_po_kg = (
             cijena_preko_50_z1 if zona == "Zona 1" else cijena_preko_50_z2
         )
-        osnova = baza + višak * dodatak_po_kg
+        osnova = baza + višak_zaokružen * dodatak_po_kg
 
     if zona == "Zona 3":
         osnova = osnova * 1.25
@@ -635,7 +638,7 @@ if uploaded_file is not None:
             "⚖️ 2. Izvještaj: Usporedba svih cijena",
             "🚨 3. Izvještaj: Samo razlike i preplate",
             "📈 4. Izvještaj: Zbirne sume fakture",
-            "🛠 5. Izvještaj: Dodatne usluge",
+            "🛠️ 5. Izvještaj: Dodatne usluge",
             "📄 6. Izvještaj: PDF Sažetak (Tranzit i Gorivo)",
         ])
 

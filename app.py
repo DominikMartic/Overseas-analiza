@@ -159,7 +159,7 @@ def odredis_zonu(pbr):
         return "Zona 3"
     elif pbr in zona_2_pbr:
         return "Zona 2"
-    elif 10000 <= pbr <= 10450:
+    elif 10000 <= pbr <= 10449:
         return "Zona 1"
     else:
         return "Zona 2"
@@ -505,7 +505,7 @@ if uploaded_file is not None:
             tranzit_dani = izracunaj_radne_dane(d_slanja, d_dostave)
 
             dopušteni_rok = dopusteni_rokovi_dict.get(
-                pbr_int, (1 if 10000 <= pbr_int <= 10450 else 2)
+                pbr_int, (1 if 10000 <= pbr_int <= 10449 else 2)
             )
 
             if tranzit_dani is not None:

@@ -201,11 +201,12 @@ def izracunaj_osnovnu_cijenu(masa, zona):
     else:
         baza = z_tablica[50.0]
         višak = masa - 50.0
+        # Zaokruživanje viška na viši cijeli broj (npr. 13.18 -> 14)
         višak_zaokružen = math.ceil(višak)
         dodatak_po_kg = (
             cijena_preko_50_z1 if zona == "Zona 1" else cijena_preko_50_z2
         )
-        osnova = baza + višak_zaokružen * dodatak_po_kg
+        osnova = baza + višak_zaokružen * dodaturak_po_kg if 'dodaturak_po_kg' in locals() else baza + višak_zaokružen * dodatak_po_kg
 
     if zona == "Zona 3":
         osnova = osnova * 1.25
@@ -260,7 +261,7 @@ def generiraj_pdf_izvjestaj(
     uk_naplaceni_transport,
     uk_ugovorena_osnova,
     uk_naplaceno_gorivo,
-    ugovoreno_gorivo_nakon_popusta,
+    ugovoreno_gorivo_bez_popusta,
     posto_goriva,
 ):
     buffer = io.BytesIO()
@@ -400,11 +401,11 @@ def generiraj_pdf_izvjestaj(
         ["Ukupno naplaćeno gorivo na fakturi", f"{uk_naplaceno_gorivo:,.2f} €"],
         [
             "Koliko treba biti (obračunato na ugovorenu osnovu)",
-            f"{ugovoreno_gorivo_nakon_popusta:,.2f} €",
+            f"{ugovoreno_gorivo_bez_popusta:,.2f} €",
         ],
         [
             "RAZLIKA ZA GORIVO (Naplaćeno - Treba biti)",
-            f"{(uk_naplaceno_gorivo - ugovoreno_gorivo_nakon_popusta):,.2f} €",
+            f"{(uk_naplaceno_gorivo - ugovoreno_gorivo_bez_popusta):,.2f} €",
         ],
     ]
     t3 = Table(wrap_data(gorivo_data), colWidths=[250, 250])
@@ -842,7 +843,7 @@ if uploaded_file is not None:
             with col_y:
                 st.metric(
                     label="Razlika u Gorivu",
-                    value=f"{(uk_naplaceno_gorivo - ugovoreno_gorivo_nakon_popusta):,.2f} €",
+                    value=f"{(uk_naplaceno_gorivo - ugovoreno_gorivo_bez_popusta):,.2f} €",
                 )
 
             st.markdown("---")
